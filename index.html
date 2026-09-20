@@ -1,0 +1,2776 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Elix Pro - Workspace</title>
+
+    <!-- Cargador de Markdown -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <!-- JSZip: lectura local de DOCX/PPTX adjuntos -->
+    <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+    <!-- Lectura local de Excel y PDF para adjuntos de Elix Mini O1 -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+    <!-- Firebase Authentication (usuario + contraseña, sin Google) -->
+    <script src="https://www.gstatic.com/firebasejs/11.10.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/11.10.0/firebase-auth-compat.js"></script>
+
+    <!-- Configuración y Cargador de MathJax para renders matemáticos -->
+    <script>
+        window.MathJax = {
+            tex: {
+                inlineMath: [['$', '$'], ['\\(', '\\)']],
+                displayMath: [['$$', '$$'], ['\\[', '\\]']],
+                processEscapes: true,
+                processEnvironments: true
+            },
+            options: {
+                skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+            }
+        };
+    </script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
+    <style>
+     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+:root {
+    /* Paleta Dark Pro (Elegante y Científica) */
+    --sidebar-bg: #09090b; /* Fondo muy oscuro */
+    --sidebar-hover: #18181b; 
+    --main-bg: #000000; /* Fondo principal negro profundo */
+    --text-primary: #fafafa;
+    --text-secondary: #a1a1aa;
+    --accent-color: #3b82f6; /* Azul pepa profesional */
+    --accent-hover: #2563eb;
+    --border-color: #27272a;
+    --user-bg: #18181b;
+    --ai-bg: #09090b;
+    
+    /* Sombras y bordes Pro en Modo Oscuro */
+    --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.5);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
+    --shadow-floating: 0 20px 40px -10px rgba(59, 130, 246, 0.15);
+    --radius-md: 12px;
+    --radius-lg: 18px;
+    --radius-full: 9999px;
+}
+
+body { 
+    margin: 0; 
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+    display: flex; 
+    height: 100vh; 
+    color: var(--text-primary); 
+    background-color: var(--main-bg); 
+    -webkit-font-smoothing: antialiased;
+}
+
+/* --- BARRA LATERAL --- */
+.sidebar { 
+    width: 290px; 
+    background-color: var(--sidebar-bg); 
+    display: flex; 
+    flex-direction: column; 
+    border-right: 1px solid var(--border-color); 
+    transition: width 0.3s ease; 
+    z-index: 10;
+}
+.sidebar-header { padding: 24px 20px 16px 20px; }
+.btn-new-chat { 
+    width: 100%; 
+    background: linear-gradient(135deg, var(--accent-hover), #1d4ed8); 
+    color: white; 
+    border: none; 
+    padding: 12px; 
+    border-radius: var(--radius-md); 
+    font-size: 0.95rem; 
+    font-weight: 500; 
+    cursor: pointer; 
+    display: flex; 
+    align-items: center; 
+    justify-content: center; 
+    gap: 8px; 
+    box-shadow: var(--shadow-md); 
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1); 
+}
+.btn-new-chat:hover { 
+    transform: translateY(-2px); 
+    box-shadow: 0 8px 20px -3px rgba(59, 130, 246, 0.4);
+}
+.chat-list { 
+    flex-grow: 1; 
+    overflow-y: auto; 
+    padding: 0 12px 20px 12px; 
+}
+.chat-item { 
+    padding: 12px 14px; 
+    margin-bottom: 6px; 
+    border-radius: var(--radius-md); 
+    cursor: pointer; 
+    font-size: 0.9rem; 
+    color: var(--text-secondary); 
+    display: flex; 
+    align-items: center; 
+    justify-content: space-between; 
+    transition: all 0.2s ease; 
+    border: 1px solid transparent;
+}
+.chat-item-title { 
+    white-space: nowrap; 
+    overflow: hidden; 
+    text-overflow: ellipsis; 
+    flex-grow: 1; 
+}
+.chat-item:hover { 
+    background-color: var(--sidebar-hover); 
+    color: var(--text-primary); 
+}
+.chat-item.active { 
+    background-color: rgba(39, 39, 42, 0.6); 
+    color: var(--accent-color); 
+    font-weight: 600; 
+    border-color: #3f3f46;
+    box-shadow: var(--shadow-sm);
+}
+
+/* Acciones de Chat */
+.chat-actions {
+    display: flex;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+.chat-item:hover .chat-actions, .chat-item.active .chat-actions { opacity: 1; }
+.btn-action-chat { 
+    background: none; 
+    border: none; 
+    color: #71717a; 
+    cursor: pointer; 
+    font-size: 1rem; 
+    padding: 4px; 
+    border-radius: 6px; 
+    transition: all 0.2s ease; 
+}
+.btn-action-chat:hover { background-color: #3f3f46; color: var(--text-primary); }
+.btn-action-chat.delete:hover { color: #ef4444; background-color: rgba(239, 68, 68, 0.1); }
+
+/* --- ÁREA PRINCIPAL Y CHAT --- */
+.main-content { 
+    flex-grow: 1; 
+    display: flex; 
+    flex-direction: column; 
+    height: 100vh;
+    overflow: hidden;
+    position: relative; 
+    background: radial-gradient(circle at top right, #09090b, #000000); 
+}
+
+.top-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 28px;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    z-index: 30;
+    flex-shrink: 0;
+}
+
+.app-title {
+    margin: 0;
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    letter-spacing: -0.5px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.app-title::before {
+    content: '🧬'; 
+    font-size: 1.3rem;
+}
+
+/* MENÚ DE EXPORTACIÓN DESPLEGABLE */
+.export-dropdown {
+    position: relative;
+    display: inline-block;
+}
+.btn-export-main {
+    background: rgba(24, 24, 27, 0.8);
+    backdrop-filter: blur(8px);
+    color: var(--text-primary); 
+    border: 1px solid var(--border-color); 
+    padding: 10px 20px; 
+    border-radius: var(--radius-full); 
+    cursor: pointer; 
+    font-weight: 600; 
+    font-size: 0.9rem; 
+    display: flex; 
+    align-items: center; 
+    gap: 8px; 
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2); 
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.btn-export-main:hover {
+    box-shadow: 0 8px 25px rgba(59, 130, 246, 0.15); 
+    border-color: #3f3f46;
+    background: rgba(39, 39, 42, 0.9);
+    transform: translateY(-1px);
+}
+.dropdown-content {
+    visibility: hidden;
+    opacity: 0;
+    position: absolute;
+    right: 0;
+    top: 120%;
+    background-color: #18181b;
+    min-width: 160px;
+    border-radius: var(--radius-md);
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+    border: 1px solid var(--border-color);
+    z-index: 40;
+    transform: translateY(-10px);
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    overflow: hidden;
+}
+.export-dropdown:hover .dropdown-content {
+    visibility: visible;
+    opacity: 1;
+    transform: translateY(0);
+}
+.dropdown-content button {
+    width: 100%;
+    text-align: left;
+    color: var(--text-primary);
+    padding: 12px 16px;
+    background: none;
+    border: none;
+    font-size: 0.9rem;
+    font-family: inherit;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.dropdown-content button:hover { background-color: #27272a; }
+.dropdown-content button:active { background-color: #3f3f46; }
+
+.chat-container { 
+    flex-grow: 1; 
+    overflow-y: auto; 
+    padding: 30px 10%; 
+    display: flex; 
+    flex-direction: column; 
+    align-items: center;
+    gap: 36px; 
+    scroll-behavior: smooth; 
+}
+
+.message-row { 
+    display: flex; 
+    gap: 20px; 
+    max-width: 100%;
+    width: 100%;
+    animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes fadeIn { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
+
+.message-row.user { flex-direction: row-reverse; }
+.avatar { 
+    width: 40px; 
+    height: 40px; 
+    border-radius: var(--radius-md); 
+    display: flex; 
+    align-items: center; 
+    justify-content: center; 
+    font-size: 1.1rem; 
+    flex-shrink: 0; 
+    font-weight: 600;
+    box-shadow: var(--shadow-sm);
+}
+.avatar-ai { 
+    background: linear-gradient(135deg, var(--accent-hover), #1d4ed8); 
+    color: #ffffff; 
+}
+.avatar-user { 
+    background-color: #27272a; 
+    color: var(--text-primary); 
+    border: 1px solid #3f3f46;
+    border-radius: var(--radius-full);
+}
+.message-content { 
+    max-width: 80%; 
+    line-height: 1.75; 
+    font-size: 0.98rem; 
+    color: var(--text-primary); 
+    padding: 20px 24px; 
+    border-radius: var(--radius-lg); 
+    overflow-x: auto; 
+}
+.user .message-content { 
+    background-color: var(--user-bg); 
+    border-top-right-radius: 4px; 
+    border: 1px solid var(--border-color);
+}
+.ai .message-content { 
+    background-color: var(--ai-bg); 
+    border: 1px solid #27272a; 
+    border-top-left-radius: 4px; 
+    box-shadow: 0 8px 30px rgba(0,0,0,0.2); 
+}
+.message-content p { margin: 0 0 14px 0; }
+.message-content p:last-child { margin-bottom: 0; }
+.message-content h1, .message-content h2, .message-content h3 { 
+    color: var(--accent-color); 
+    margin-top: 24px; 
+    margin-bottom: 12px;
+    font-weight: 600;
+}
+.message-content table { 
+    border-collapse: collapse; 
+    width: 100%; 
+    margin: 16px 0; 
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 0 0 1px var(--border-color);
+}
+.message-content th, .message-content td { 
+    border-bottom: 1px solid var(--border-color); 
+    padding: 12px 16px; 
+    text-align: left; 
+}
+.message-content th { background-color: #18181b; font-weight: 600; color: var(--text-secondary); }
+
+/* --- CAJA DE RAZONAMIENTO (THINKING) --- */
+.thinking-box { 
+    background-color: #18181b; 
+    border-left: 4px solid var(--accent-hover); 
+    padding: 16px; 
+    margin-bottom: 20px; 
+    border-radius: 0 var(--radius-md) var(--radius-md) 0; 
+    font-size: 0.9rem; 
+}
+.thinking-box summary { 
+    cursor: pointer; 
+    font-weight: 500; 
+    color: var(--accent-hover); 
+    display: flex; 
+    align-items: center; 
+    gap: 8px; 
+    user-select: none;
+    transition: color 0.2s;
+}
+.thinking-box summary:hover { color: #60a5fa; }
+.thinking-text { 
+    margin-top: 14px; 
+    font-size: 0.85rem; 
+    color: var(--text-secondary); 
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    line-height: 1.6;
+}
+
+/* --- ÁREA DE ENTRADA (INPUT) MEJORADA --- */
+.input-wrapper { 
+    flex-shrink: 0; 
+    padding: 20px 10% 32px 10%; 
+    background: linear-gradient(to top, rgba(0, 0, 0, 1) 40%, rgba(0, 0, 0, 0.8) 70%, transparent); 
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+}
+
+.input-box { 
+    width: 100%;
+    max-width: 950px;
+    background-color: rgba(24, 24, 27, 0.7);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255,255,255,0.08); 
+    border-radius: 24px; 
+    padding: 18px 24px; 
+    display: flex; 
+    flex-direction: column; 
+    gap: 16px; 
+    box-shadow: var(--shadow-floating); 
+    transition: box-shadow 0.3s ease, border-color 0.3s;
+}
+.input-box:focus-within {
+    box-shadow: 0 25px 60px -12px rgba(59, 130, 246, 0.2);
+    border-color: rgba(59, 130, 246, 0.4);
+}
+
+.input-controls { 
+    display: flex; 
+    justify-content: center; 
+    align-items: center; 
+    padding-bottom: 14px; 
+    border-bottom: 1px solid var(--border-color); 
+}
+.control-group { 
+    display: flex; 
+    align-items: center; 
+    gap: 16px; 
+    font-size: 0.88rem; 
+    color: var(--text-secondary); 
+    font-weight: 500;
+}
+select { 
+    background: #18181b; 
+    border: 1px solid var(--border-color); 
+    padding: 8px 14px; 
+    border-radius: 8px; 
+    font-size: 0.88rem; 
+    cursor: pointer; 
+    color: var(--text-primary);
+    outline: none;
+    transition: all 0.2s;
+    font-weight: 600;
+}
+select option {
+    background-color: #18181b;
+    color: var(--text-primary);
+}
+select:hover { border-color: #3f3f46; }
+select:focus { border-color: var(--accent-color); }
+.highlight-select { background-color: rgba(37, 99, 235, 0.1); border-color: rgba(37, 99, 235, 0.5); color: #60a5fa; }
+
+.textarea-container { 
+    display: flex; 
+    gap: 16px; 
+    align-items: center; 
+}
+textarea { 
+    flex-grow: 1; 
+    background: transparent; 
+    border: none; 
+    resize: none; 
+    outline: none; 
+    font-family: inherit; 
+    font-size: 1.05rem; 
+    line-height: 1.6;
+    max-height: 250px; 
+    padding: 12px 0; 
+    color: var(--text-primary);
+}
+textarea::placeholder { color: #52525b; }
+.btn-icon { 
+    background-color: #18181b; 
+    color: #a1a1aa; 
+    border: 1px solid transparent; 
+    width: 48px; 
+    height: 48px; 
+    border-radius: var(--radius-md); 
+    cursor: pointer; 
+    display: flex; 
+    align-items: center; 
+    justify-content: center; 
+    font-size: 1.3rem; 
+    transition: all 0.2s; 
+}
+.btn-icon:hover { background-color: #27272a; color: var(--accent-color); }
+.btn-send { 
+    background: linear-gradient(135deg, var(--accent-hover), #1d4ed8);
+    color: white; 
+    border-radius: 50%; 
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25);
+}
+.btn-send:hover { transform: scale(1.05); color: white; box-shadow: 0 6px 16px rgba(59, 130, 246, 0.4); }
+.btn-send:disabled { background: #3f3f46; cursor: not-allowed; transform: none; box-shadow: none; color: #71717a; }
+
+/* --- ESTADO DEL SISTEMA --- */
+.system-status { 
+    display: none; 
+    align-items: center; 
+    gap: 12px; 
+    font-size: 0.85rem; 
+    color: #60a5fa; 
+    font-weight: 600; 
+    justify-content: center; 
+    background: #18181b;
+    padding: 10px 24px;
+    border-radius: var(--radius-full);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    position: absolute !important;
+    top: -28px !important;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    z-index: 50;
+}
+.spinner { 
+    width: 16px; 
+    height: 16px; 
+    border: 2px solid #27272a; 
+    border-top: 2px solid var(--accent-color); 
+    border-radius: 50%; 
+    animation: spin 0.8s linear infinite; 
+}
+@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+/* --- SCROLLBAR PRO --- */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { 
+    background: #3f3f46; 
+    border-radius: 10px; 
+    border: 2px solid transparent; 
+    background-clip: padding-box; 
+}
+::-webkit-scrollbar-thumb:hover { background-color: #52525b; }
+
+.chat-container::after {
+    content: "";
+    display: block;
+    min-height: 50px;
+    width: 100%;
+    flex-shrink: 0;
+}
+    </style>
+</head>
+<body>
+
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <button class="btn-new-chat" onclick="crearNuevoChat()">+ Nuevo Análisis</button>
+        </div>
+        <div class="chat-list" id="chat-list"></div>
+    </aside>
+
+    <main class="main-content">
+        <div class="top-bar">
+            <h1 class="app-title">Elix Pro</h1>
+            
+            <div class="export-dropdown">
+                <button class="btn-export-main" id="btn-main-export"><span class="export-icon">⬇️</span><span class="export-label">Exportar Documento</span></button>
+                <div class="dropdown-content">
+                    <button onclick="exportarPDFSoloRespuestas()">📄 Guardar como PDF</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="chat-container" id="chat-history"></div>
+
+        <div class="input-wrapper">
+            <div id="loading" class="system-status">
+                <div class="spinner"></div>
+                <span id="loading-text">Elix Pro procesando...</span>
+            </div>
+            
+            <div class="input-box">
+                <div class="input-controls">
+                    <div class="control-group">
+                        <div>
+                            Modo Académico: 
+                            <select id="academic-mode" class="highlight-select" onchange="this.className = this.value !== 'none' ? 'highlight-select' : ''">
+                                <option value="none">Desactivado</option>
+                                <option value="apa7" selected>APA 7ma Edición</option>
+                                <option value="vancouver">Vancouver</option>
+                                <option value="ieee">IEEE</option>
+                            </select>
+                        </div>
+                        <span style="color:#3f3f46;">|</span>
+                        <div>
+                            Modo de Análisis: 
+                            <select id="thinking-level">
+                                <option value="low">Rápido (Directo)</option>
+                                <option value="medium" selected>Estándar (Equilibrado)</option>
+                                <option value="high">Riguroso (Técnico)</option>
+                                <option value="max">Profundo (Élite)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="textarea-container">
+                    <button class="btn-icon" title="Adjuntar Archivo" onclick="document.getElementById('file-upload').click()">📎</button>
+                    <input type="file" id="file-upload" style="display:none" multiple accept=".pdf,.docx,.pptx,.xlsx,.xls,.csv,.txt,.md,.json,image/*" onchange="elixSeleccionarArchivos(event)">
+                    
+                    <textarea id="user-input" rows="1" placeholder="Escribe tu consulta científica o adjunta un archivo..." oninput="autoResize(this)" onkeydown="if(event.key==='Enter' && !event.shiftKey){ event.preventDefault(); enviarMensaje(); }"></textarea>
+                    
+                    <button class="btn-icon btn-send" id="btn-send" onclick="enviarMensaje()">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // ==========================================
+        // 1. BACKEND NETLIFY — SIN CLAVES PRIVADAS EN EL FRONTEND
+        // ==========================================
+        const ELIX_API_BASE = '/.netlify/functions';
+        const ELIX_GEMINI_MODEL = 'gemini-3.1-flash-lite';
+
+        // Modelos de Groq usados por Elix Mini O1. No son secretos; la API key vive en Netlify.
+        const GROQ_MODELS_FALLBACK = [
+            "qwen/qwen3.8-27b",
+            "openai/gpt-oss-120b",
+            "openai/gpt-oss-20b"
+        ];
+
+        async function elixBackend(nombre, payload = {}) {
+            const response = await fetch(`${ELIX_API_BASE}/${nombre}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            let data = {};
+            try { data = await response.json(); } catch (_) {}
+
+            if (!response.ok) {
+                const mensaje = data?.error || data?.message || `${response.status} ${response.statusText}`;
+                const error = new Error(mensaje || 'Error del backend de Elix.');
+                error.status = response.status;
+                throw error;
+            }
+            return data;
+        }
+
+        function elixNuevoJobId() {
+            const uuid = (globalThis.crypto && typeof globalThis.crypto.randomUUID === 'function')
+                ? globalThis.crypto.randomUUID()
+                : `${Date.now()}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
+            return `elix-${uuid}`.replace(/[^a-zA-Z0-9_-]/g, '');
+        }
+
+        function elixFormatoEspera(ms) {
+            const total = Math.max(0, Math.floor(ms / 1000));
+            const min = Math.floor(total / 60);
+            const seg = String(total % 60).padStart(2, '0');
+            return min > 0 ? `${min}:${seg}` : `${total}s`;
+        }
+
+        async function elixBackground(nombre, payload = {}, opciones = {}) {
+            const jobId = elixNuevoJobId();
+            const etiqueta = opciones.etiqueta || 'Elix procesando';
+            // Netlify Background Functions pueden trabajar mucho más que una Function síncrona.
+            // Dejamos margen antes del límite de ejecución de background.
+            const maxWaitMs = Number(opciones.maxWaitMs) > 0 ? Number(opciones.maxWaitMs) : 14 * 60 * 1000;
+            const inicio = Date.now();
+
+            const inicioResponse = await fetch(`${ELIX_API_BASE}/${nombre}-background`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ...payload, job_id: jobId })
+            });
+
+            if (!inicioResponse.ok) {
+                let data = {};
+                try { data = await inicioResponse.json(); } catch (_) {}
+                const mensaje = data?.error || data?.message || `${inicioResponse.status} ${inicioResponse.statusText}`;
+                const error = new Error(mensaje || `No se pudo iniciar ${etiqueta}.`);
+                error.status = inicioResponse.status;
+                throw error;
+            }
+
+            // El resultado vive en Netlify Blobs; esta petición solo consulta el estado,
+            // por lo que nunca mantiene abierta una Function durante todo el razonamiento.
+            while (true) {
+                const elapsed = Date.now() - inicio;
+                if (elapsed > maxWaitMs) {
+                    throw new Error(`${etiqueta} excedió el tiempo máximo de una tarea background en Netlify.`);
+                }
+
+                if (typeof setCargando === 'function') {
+                    setCargando(true, `${etiqueta} · ${elixFormatoEspera(elapsed)}`);
+                }
+
+                const estado = await elixBackend('ai-job-status', { job_id: jobId });
+
+                if (estado?.status === 'done') {
+                    return estado.result;
+                }
+
+                if (estado?.status === 'error') {
+                    const error = new Error(estado?.error || `${etiqueta} no pudo completarse.`);
+                    error.status = estado?.upstream_status || 500;
+                    throw error;
+                }
+
+                await new Promise(resolve => setTimeout(resolve, elapsed < 15000 ? 1200 : 2200));
+            }
+        }
+
+        window.elixBackend = elixBackend;
+        window.elixBackground = elixBackground;
+        // ==========================================
+
+        let chats = []; 
+        let currentChatId = null;
+
+        const directivasThinking = {
+            low: `Instrucción de respuesta RÁPIDA:
+Prioriza velocidad, precisión y utilidad inmediata.
+Responde directamente a la solicitud sin introducciones innecesarias, repeticiones ni conclusiones redundantes.
+Identifica rápidamente qué pide el usuario y entrega la solución más simple que sea correcta.
+
+REGLAS:
+- Si la pregunta es sencilla, responde de forma breve y directa.
+- Si requiere cálculo, muestra únicamente las operaciones indispensables para verificar el resultado.
+- Si requiere explicación, incluye solo los conceptos necesarios para comprender la respuesta.
+- No desarrolles análisis extensos ni explores alternativas salvo que sean necesarias.
+- No inventes datos, valores, fuentes ni supuestos.
+- Si falta un dato indispensable, indícalo claramente.
+- Respeta cualquier directiva académica, matemática o de formato recibida junto con esta instrucción.
+- Evita frases de relleno como "claro", "por supuesto", "a continuación" o resúmenes de lo que el usuario acaba de pedir.
+
+Objetivo: producir la respuesta correcta con la menor cantidad de texto y pasos innecesarios posible.`,
+            medium: `Instrucción de respuesta ESTÁNDAR:
+Resuelve la solicitud con un equilibrio óptimo entre rigor, claridad, profundidad y eficiencia.
+Analiza cuidadosamente el problema antes de responder y presenta únicamente el razonamiento necesario para que la solución sea comprensible y verificable.
+
+REGLAS:
+- Identifica con precisión el objetivo principal de la solicitud.
+- Organiza la respuesta de forma lógica y progresiva.
+- Explica los pasos relevantes cuando el problema lo requiera, evitando detalles obvios o redundantes.
+- En problemas matemáticos, científicos o técnicos, muestra fórmulas, sustituciones, unidades y resultados cuando aporten valor.
+- Distingue claramente entre datos proporcionados, resultados calculados, supuestos e inferencias.
+- No inventes información, fuentes, cifras, autores ni referencias.
+- Si existen varias interpretaciones razonables, utiliza la más probable y señala brevemente el supuesto adoptado.
+- Si falta información esencial para obtener una respuesta fiable, indícalo explícitamente.
+- Adapta la extensión de la respuesta a la dificultad real del problema: una pregunta sencilla debe seguir teniendo una respuesta sencilla.
+- Respeta estrictamente cualquier directiva académica, bibliográfica, matemática o de formato recibida junto con esta instrucción.
+- Evita introducciones genéricas, repeticiones del enunciado y conclusiones que solo repitan lo ya explicado.
+
+Objetivo: entregar una respuesta técnicamente sólida, clara y suficientemente desarrollada, sin llegar al nivel de exhaustividad de los modos Riguroso o Profundo.`,
+            high: "Instrucción CRÍTICA: Eres un modelo estrictamente técnico y formal. NO debes hacer nada intuitivo ni inventar información. Basa tu respuesta EXCLUSIVAMENTE en literatura científica de alto nivel (mínimo revistas científicas Q3, libros formales o tesis). Enfócate única y exclusivamente en responder lo que pide el prompt de forma técnica, sin suposiciones.",
+            max: "Instrucción CRÍTICA MÁXIMA e inquebrantable: Eres el nivel de rigor máximo estrictamente técnico y formal. NO debes hacer nada intuitivo ni inventar información. Basa tu respuesta EXCLUSIVAMENTE en literatura científica del más alto nivel solo revistas de primer nivel revisadas por pares (ej. Science, Nature) o literatura de universidades de élite (MIT, Harvard). MINIMO debes usar 10 fuentes bibliográficas para tu respuesta. CERO literatura de tesis. Enfócate única y exclusivamente en responder lo que pide el prompt de forma técnica, sin suposiciones. Debes redactar la respuesta con lenguaje científico de alto nivel y sin cometer ningún error de redacción, grámática u ortografía."
+        };
+
+        window.onload = () => {
+            let chatsNuevos = [];
+            let chatsAntiguos = [];
+
+            try { chatsNuevos = JSON.parse(localStorage.getItem('cienciaChatsData')) || []; } catch(e) { }
+            try { chatsAntiguos = JSON.parse(localStorage.getItem('quimicaChatsPro')) || []; } catch(e) { }
+
+            if (chatsAntiguos.length > 0) {
+                const esNuevaSinMensajes = chatsNuevos.length === 0 || (chatsNuevos.length === 1 && chatsNuevos[0].messages.length === 0);
+                if (esNuevaSinMensajes) {
+                    chats = chatsAntiguos; 
+                    guardarEnLocal();      
+                } else {
+                    chats = chatsNuevos;
+                }
+            } else {
+                chats = chatsNuevos;
+            }
+
+            if (chats.length === 0) crearNuevoChat();
+            else seleccionarChat(chats[0].id);
+        };
+
+        function crearNuevoChat() {
+            const newChat = { id: Date.now().toString(), title: "Nuevo Análisis", messages: [] };
+            chats.unshift(newChat);
+            guardarEnLocal();
+            seleccionarChat(newChat.id);
+        }
+
+        function seleccionarChat(id) {
+            currentChatId = id;
+            renderizarListaChats();
+            renderizarMensajesActuales();
+        }
+
+        function renombrarChat(id, event) {
+            event.stopPropagation();
+            const chat = chats.find(c => c.id === id);
+            if (!chat) return;
+            const nuevoNombre = prompt("Nuevo nombre del análisis:", chat.title);
+            if (nuevoNombre && nuevoNombre.trim() !== "") {
+                chat.title = nuevoNombre.trim();
+                guardarEnLocal();
+                renderizarListaChats();
+            }
+        }
+
+        function eliminarChat(id, event) {
+            event.stopPropagation();
+            if (!confirm("¿Deseas eliminar este análisis?")) return;
+            chats = chats.filter(c => c.id !== id);
+            guardarEnLocal();
+            if (chats.length === 0) crearNuevoChat();
+            else seleccionarChat(chats[0].id);
+        }
+
+        function obtenerChatActual() { return chats.find(c => c.id === currentChatId); }
+        function guardarEnLocal() { localStorage.setItem('cienciaChatsData', JSON.stringify(chats)); }
+
+        // ESTA ES LA FUNCIÓN MEJORADA QUE PROTEGE LAS ECUACIONES MATEMÁTICAS (CORREGIDA)
+        function formatTextoMarkdown(text) { 
+            if (!text) return '';
+            
+            let procesado = text;
+            
+            // 1. Convertir delimitadores de LaTeX a los estándar ($$ y $)
+            procesado = procesado.replace(/\\\[/g, '$$$$').replace(/\\\]/g, '$$$$');
+            procesado = procesado.replace(/\\\(/g, '$').replace(/\\\)/g, '$');
+
+            // 2. Extraer y proteger las ecuaciones matemáticas
+            const mathBlocks = [];
+            let counter = 0;
+
+            // Busca tanto bloques $$...$$ como $...$ y entornos \begin...\end (Corregido para que markdown no interfiera)
+            procesado = procesado.replace(/\$\$[\s\S]*?\$\$|\$[\s\S]*?\$|\\begin\{[^}]+\}[\s\S]*?\\end\{[^}]+\}/g, (match) => {
+                const id = `MATHBLOCKPLACEHOLDER${counter}END`;
+                mathBlocks.push(match);
+                counter++;
+                return id;
+            });
+
+            // 3. Procesar el texto limpio con Markdown
+            let htmlFormateado = typeof marked !== 'undefined' ? marked.parse(procesado) : procesado;
+
+            // 4. Devolver las ecuaciones exactas a su lugar
+            mathBlocks.forEach((math, index) => {
+                // Se usa una función () => math para evitar que JS elimine símbolos $
+                htmlFormateado = htmlFormateado.replace(`MATHBLOCKPLACEHOLDER${index}END`, () => math);
+            });
+
+            return htmlFormateado; 
+        }
+
+        function escapeHTML(str) { return (str || '').replace(/[&<>'"]/g, tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)); }
+
+        function renderizarListaChats() {
+            const listDiv = document.getElementById('chat-list');
+            listDiv.innerHTML = '';
+            chats.forEach(chat => {
+                const item = document.createElement('div');
+                item.className = `chat-item ${chat.id === currentChatId ? 'active' : ''}`;
+                item.onclick = () => seleccionarChat(chat.id);
+                
+                item.innerHTML = `
+                    <span class="chat-item-title" title="${escapeHTML(chat.title)}">${escapeHTML(chat.title)}</span>
+                    <div class="chat-actions">
+                        <button class="btn-action-chat" title="Renombrar" onclick="renombrarChat('${chat.id}', event)">✏️</button>
+                        <button class="btn-action-chat delete" title="Eliminar" onclick="eliminarChat('${chat.id}', event)">🗑️</button>
+                    </div>
+                `;
+                listDiv.appendChild(item);
+            });
+        }
+
+        function renderizarMensajesActuales() {
+            const chatContainer = document.getElementById('chat-history');
+            chatContainer.innerHTML = '';
+            const chatActual = obtenerChatActual();
+            
+            if (!chatActual || chatActual.messages.length === 0) {
+                chatContainer.innerHTML = `
+                    <div style="text-align:center; margin-top:10%; color:var(--text-secondary);">
+                        <h2 style="color: var(--accent-color);">🧬 Entorno Elix Pro</h2>
+                        <p>Plataforma científica integrada. Elix Flash gestiona los datos e internet de forma autónoma, <br>mientras Elix Pro se encarga del análisis profundo.</p>
+                    </div>`;
+                return;
+            }
+            chatActual.messages.forEach(msg => {
+                if (msg.role === 'system') return; 
+                agregarMensajeUI(msg.role, msg.displayContent || msg.content, msg.reasoning, msg.attachments || []);
+            });
+        }
+
+        function agregarMensajeUI(rol, texto, razonamiento = null, adjuntos = []) {
+            const chatContainer = document.getElementById('chat-history');
+            if (chatContainer.innerHTML.includes("Entorno Elix Pro")) chatContainer.innerHTML = '';
+            const row = document.createElement('div');
+            const isUser = rol === 'user';
+            row.className = `message-row ${isUser ? 'user' : 'ai'}`;
+
+            let bloqueReasoningHTML = '';
+            if (!isUser && razonamiento) {
+                bloqueReasoningHTML = `<details class="thinking-box"><summary>🧠 Elix Pro (Razonamiento)</summary><div class="thinking-text">${formatTextoMarkdown(razonamiento)}</div></details>`;
+            }
+
+            const textoFormateado = isUser ? escapeHTML(texto).replace(/\n/g, '<br>') : formatTextoMarkdown(texto);
+            const adjuntosHTML = Array.isArray(adjuntos) && adjuntos.length
+                ? `<div class="elix-message-attachments">${adjuntos.map(a => `<span class="elix-message-file" title="${escapeHTML(a.name || 'Archivo')}">📎 ${escapeHTML(a.name || 'Archivo')}</span>`).join('')}</div>`
+                : '';
+            row.innerHTML = `<div class="avatar ${isUser ? 'avatar-user' : 'avatar-ai'}">${isUser ? 'U' : 'E'}</div><div class="message-content">${adjuntosHTML}${bloqueReasoningHTML}<div>${textoFormateado}</div></div>`;
+            chatContainer.appendChild(row);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+
+            if (window.MathJax && window.MathJax.typesetPromise) window.MathJax.typesetPromise([row]).catch(err => console.log(err));
+        }
+
+        function autoResize(textarea) { textarea.style.height = 'auto'; textarea.style.height = (textarea.scrollHeight < 150 ? textarea.scrollHeight : 150) + 'px'; }
+        
+        function setCargando(estado, texto = "Elix Pro procesando...") {
+            document.getElementById('loading-text').innerText = texto;
+            document.getElementById('loading').style.display = estado ? 'flex' : 'none';
+            document.getElementById('btn-send').disabled = estado;
+        }
+
+        // ==========================================
+        // 2. TAVILY (ELIX WEB SEARCH)
+        // ==========================================
+        async function buscarEnTavily(query) {
+            const consulta = String(query || '').trim();
+            if (!consulta) throw new Error('La consulta de búsqueda está vacía.');
+            const data = await elixBackground('tavily-search', { query: consulta }, { etiqueta: '🌍 Elix Search buscando fuentes' });
+            const resultados = Array.isArray(data?.results) ? data.results : [];
+            if (!resultados.length) throw new Error('Tavily no devolvió resultados para esta consulta.');
+            return resultados.map((r, i) => {
+                const titulo = r?.title || `Resultado ${i + 1}`;
+                const url = r?.url || '';
+                const contenido = r?.content || r?.snippet || '';
+                return `Fuente ${i + 1} (${titulo}${url ? ` - ${url}` : ''}): ${contenido}`;
+            }).join('\n\n');
+        }
+
+        window.buscarEnTavily = buscarEnTavily;
+
+        async function generarQueryBusqueda(query) {
+            try {
+                const prompt = `Extrae únicamente las palabras clave principales de búsqueda académica/web (máximo 6 palabras clave en español o inglés) para buscar fuentes relevantes en Tavily/Google. No agregues explicaciones ni comillas. Solicitud: "${query}"`;
+                const data = await elixBackground('gemini-generate', { payload: {
+                    contents: [{ parts: [{ text: prompt }] }],
+                    generationConfig: { temperature: 0.1, maxOutputTokens: 30 }
+                }});
+                return data.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('').trim() || query;
+            } catch (e) {
+                return query;
+            }
+        }
+
+        // ==========================================
+        // 3. GEMINI COMO ROUTER (DECISIÓN DE BÚSQUEDA)
+        // ==========================================
+        async function elixFlashEvaluaBusqueda(query, academicMode) {
+            if (String(academicMode || 'none').toLowerCase() !== 'none') return true;
+            try {
+                const prompt = `Actúa como un enrutador inteligente de búsqueda científica y web. Responde ÚNICAMENTE SI o NO. Responde SI si la solicitud requiere bibliografía, fuentes, información actualizada o internet. Solicitud: "${query}"`;
+                const data = await elixBackground('gemini-generate', { payload: {
+                    contents: [{ parts: [{ text: prompt }] }],
+                    generationConfig: { temperature: 0.0, maxOutputTokens: 5 }
+                }});
+                const respuesta = data.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('').trim().toUpperCase() || '';
+                return respuesta.startsWith('SI');
+            } catch (e) {
+                console.warn('Elix Flash Router falló; se continuará sin bloquear el chat:', e);
+                return false;
+            }
+        }
+
+        // ==========================================
+        // 4. FLUJO PRINCIPAL (ELIX PRO + DEEPSEEK CITATIONS)
+        // ==========================================
+        async function enviarMensaje() {
+            const inputField = document.getElementById('user-input');
+            let peticionOriginal = inputField.value.trim();
+            const contextoArchivosElix = String(window.ELIX_CONTEXT_ARCHIVOS_PENDIENTE || '');
+            const adjuntosElix = Array.isArray(window.ELIX_ADJUNTOS_EN_ENVIO) ? window.ELIX_ADJUNTOS_EN_ENVIO : [];
+            if (!peticionOriginal && contextoArchivosElix) peticionOriginal = 'Analiza los archivos adjuntos.';
+            const nivelThinking = document.getElementById('thinking-level').value;
+            const academicMode = document.getElementById('academic-mode').value;
+
+            if (!peticionOriginal) return;
+
+            inputField.value = '';
+            inputField.style.height = 'auto';
+            agregarMensajeUI('user', peticionOriginal, null, adjuntosElix);
+
+            const chatActual = obtenerChatActual();
+            if (chatActual.messages.length === 0) {
+                chatActual.title = peticionOriginal.substring(0, 25) + "...";
+                renderizarListaChats();
+            }
+
+            setCargando(true, "⚡ Elix Flash evaluando solicitud académica...");
+            
+            let contextoWeb = "";
+            const requiereInternet = await window.elixFlashEvaluaBusqueda(peticionOriginal, academicMode);
+            
+            if (requiereInternet) {
+                setCargando(true, "🌍 Elix Search obteniendo fuentes...");
+                try {
+                    const queryOptimizada = await window.generarQueryBusqueda(peticionOriginal);
+                    contextoWeb = await window.buscarEnTavily(queryOptimizada);
+                } catch (e) {
+                    console.warn("Aviso de búsqueda web:", e);
+                    const detalle = e?.message || String(e);
+                    setCargando(true, `⚠️ Elix Search: ${detalle}`);
+                    await new Promise(resolve => setTimeout(resolve, 1400));
+                }
+            }
+
+            let promptEnriquecido = `[DIRECTIVA DE SISTEMA: ${directivasThinking[nivelThinking]}]\n`;
+            promptEnriquecido += `[REGLA DE FORMATO MATEMÁTICO: Escribe TODAS las ecuaciones en formato LaTeX puro. Usa SIEMPRE "$$" para ecuaciones en bloque y "$" para ecuaciones en línea. ESTÁ ESTRICTAMENTE PROHIBIDO usar corchetes o paréntesis como delimitadores matemáticos.]\n\n`;
+            
+            if (academicMode !== "none") {
+                let especificidadAPA = academicMode === "apa7" ? "Aplica rigurosamente las normas APA 7ma Edición." : "";
+                promptEnriquecido += `[DIRECTIVA ACADÉMICA ESTRICTA]: Integra citas en el texto y genera las Referencias Bibliográficas al final en formato ${academicMode.toUpperCase()}. ${especificidadAPA} ESTÁ ESTRICTAMENTE PROHIBIDO RESUMIR O RECORTAR LA INFORMACIÓN. Mantén toda tu explicación técnica y paso a paso original, limitándote únicamente a incorporar el rigor bibliográfico sin sacrificar ni una letra de tu análisis.\n\n`;
+            }
+
+            if (contextoWeb) promptEnriquecido += `[INFORMACIÓN ACTUALIZADA / BIBLIOGRAFÍA ENCONTRADA EN LA WEB]:\n${contextoWeb}\n\n[FIN DE LA INFORMACIÓN WEB]\n\nUtiliza la información anterior si es relevante para citar y respaldar tu respuesta académica a la siguiente solicitud:\n`;
+            if (contextoArchivosElix) {
+                promptEnriquecido += `\n[CONTEXTO DE ARCHIVOS PROCESADO POR ELIX MINI O1 / GROQ]:\n${contextoArchivosElix}\n[FIN DEL CONTEXTO DE ARCHIVOS]\n\n`;
+            }
+            promptEnriquecido += peticionOriginal;
+
+            chatActual.messages.push({ role: 'user', content: promptEnriquecido, displayContent: peticionOriginal, attachments: adjuntosElix });
+            guardarEnLocal();
+
+            setCargando(true, "🧠 Elix Pro analizando y redactando...");
+
+            try {
+                const mensajesParaAPI = chatActual.messages.map(m => ({ role: m.role, content: m.content }));
+                
+                const data = await elixBackground('deepseek-chat', {
+                    messages: mensajesParaAPI,
+                    max_tokens: 30000
+                }, { etiqueta: '🧠 Elix Pro analizando y redactando' });
+                
+                let respuestaFinal = data.choices[0].message.content;
+                let razonamiento = data.choices[0].message.reasoning_content || null;
+
+                chatActual.messages.push({ 
+                    role: 'assistant', 
+                    content: respuestaFinal,
+                    reasoning: razonamiento
+                });
+                
+                guardarEnLocal();
+                agregarMensajeUI('assistant', respuestaFinal, razonamiento);
+
+
+            } catch (error) {
+                // Si el usuario detuvo la respuesta, dejamos que el módulo de STOP
+                // restaure el prompt sin mostrar un falso error.
+                if (error && error.name === 'AbortError') throw error;
+                console.error(error);
+                const detalle = String(error?.message || 'No se pudo completar la respuesta.');
+                const mensajeError = `⚠️ Elix Pro no pudo completar esta respuesta: ${detalle}`;
+                chatActual.messages.push({
+                    role: 'assistant',
+                    content: mensajeError,
+                    reasoning: null,
+                    isError: true
+                });
+                guardarEnLocal();
+                agregarMensajeUI('assistant', mensajeError);
+            } finally {
+                setCargando(false);
+            }
+        }
+
+        // ==========================================
+        // 5. ELIX FLASH LEYENDO ARCHIVOS
+        // ==========================================
+        async function procesarArchivoConGemini(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            setCargando(true, `✨ Elix Flash extrayendo datos de ${file.name}...`);
+            try {
+                const reader = new FileReader();
+                const dataUrl = await new Promise((resolve, reject) => {
+                    reader.onload = () => resolve(reader.result);
+                    reader.onerror = () => reject(reader.error || new Error('No se pudo leer el archivo.'));
+                    reader.readAsDataURL(file);
+                });
+                const base64Data = String(dataUrl).split(',')[1] || '';
+                const data = await elixBackground('gemini-generate', { payload: {
+                    contents: [{ parts: [
+                        { text: 'Eres un extractor de datos de precisión. Extrae textualmente todo el contenido científico, ecuaciones y datos de este documento. Preséntalo de forma limpia en texto plano.' },
+                        { inlineData: { data: base64Data, mimeType: file.type || 'application/octet-stream' } }
+                    ]}]
+                }});
+                const texto = data.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('') || '';
+                const inputField = document.getElementById('user-input');
+                inputField.value += `[Contexto del documento ${file.name} extraído por Elix Flash]:\n${texto}\n\n`;
+                autoResize(inputField);
+            } catch (error) {
+                console.error(error);
+                alert('Error procesando el archivo con Elix Flash.');
+            } finally {
+                setCargando(false);
+                event.target.value = '';
+            }
+        }
+
+        // PDF se mantiene como única exportación.
+
+        function exportarPDFSoloRespuestas() { window.print(); }
+    </script>
+
+<!-- ==========================================
+         NUEVO MÓDULO: STOP GLOBAL Y LÁPIZ DE EDICIÓN
+         (Este módulo reemplaza al anterior)
+         ========================================== -->
+    <style>
+        .btn-stop {
+            display: none;
+            background: rgba(239, 68, 68, 0.9);
+            color: white;
+            border: 1px solid #f87171;
+            padding: 8px 24px;
+            border-radius: var(--radius-full);
+            font-weight: 600;
+            font-size: 0.9rem;
+            cursor: pointer;
+            position: absolute;
+            top: -55px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 999;
+            box-shadow: 0 8px 20px rgba(239, 68, 68, 0.3);
+            transition: all 0.2s;
+            backdrop-filter: blur(8px);
+        }
+        .btn-stop:hover { background: #dc2626; transform: translateX(-50%) scale(1.05); }
+
+        .btn-edit-prompt {
+            opacity: 0;
+            background: #18181b;
+            color: #a1a1aa;
+            border: 1px solid #3f3f46;
+            border-radius: 50%;
+            width: 36px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin: auto 0 auto 15px;
+            flex-shrink: 0;
+            font-size: 0.9rem;
+        }
+        .message-row.user:hover .btn-edit-prompt { opacity: 1; }
+        .btn-edit-prompt:hover { background: var(--accent-hover); color: white; border-color: var(--accent-hover); transform: scale(1.1); }
+    </style>
+
+    <script>
+        (function() {
+            // 1. STOP INTEGRADO EN EL MISMO BOTÓN DE ENVIAR
+            const btnSend = document.getElementById('btn-send');
+            const SEND_ICON = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>`;
+            const STOP_ICON = `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"></rect></svg>`;
+
+            let abortController = null;
+            let solicitudActiva = false;
+
+            function actualizarBotonEnvio(estaGenerando) {
+                solicitudActiva = estaGenerando;
+                btnSend.classList.toggle('is-stopping', estaGenerando);
+                btnSend.innerHTML = estaGenerando ? STOP_ICON : SEND_ICON;
+                btnSend.title = estaGenerando ? 'Detener respuesta' : 'Enviar mensaje';
+                btnSend.setAttribute('aria-label', estaGenerando ? 'Detener respuesta' : 'Enviar mensaje');
+                // Durante una respuesta debe seguir siendo clicable para poder detenerla.
+                btnSend.disabled = false;
+            }
+
+            const originalSetCargando = setCargando;
+            setCargando = function(estado, texto) {
+                originalSetCargando(estado, texto);
+
+                // Solo convertimos Enviar en STOP cuando la carga pertenece al chat.
+                // Otros procesos auxiliares conservan el comportamiento original.
+                if (estado && abortController) {
+                    actualizarBotonEnvio(true);
+                } else if (!estado) {
+                    actualizarBotonEnvio(false);
+                }
+            };
+
+            // Interceptar los fetch del flujo del chat para poder abortarlos.
+            const originalFetch = window.fetch;
+            window.fetch = async function(...args) {
+                if (abortController) {
+                    args[1] = args[1] || {};
+                    args[1].signal = abortController.signal;
+                }
+                return await originalFetch.apply(this, args);
+            };
+
+            // Envolver enviarMensaje: si ya está generando, el mismo botón detiene.
+            const originalEnviarMensaje = enviarMensaje;
+            enviarMensaje = async function() {
+                if (solicitudActiva && abortController) {
+                    abortController.abort();
+                    return;
+                }
+
+                abortController = new AbortController();
+                try {
+                    await originalEnviarMensaje();
+                } catch (error) {
+                    if (error && error.name === 'AbortError') {
+                        const chatActual = obtenerChatActual();
+                        if (chatActual && chatActual.messages.length > 0) {
+                            const lastMsg = chatActual.messages[chatActual.messages.length - 1];
+                            if (lastMsg.role === 'user') {
+                                const input = document.getElementById('user-input');
+                                input.value = lastMsg.displayContent || lastMsg.content;
+                                autoResize(input);
+
+                                // Mantiene el comportamiento anterior: al detener, el prompt
+                                // vuelve al editor y se retira del historial incompleto.
+                                chatActual.messages.pop();
+                                guardarEnLocal();
+                            }
+                        }
+                        renderizarMensajesActuales();
+                        setCargando(false);
+                    } else {
+                        console.error(error);
+                    }
+                } finally {
+                    abortController = null;
+                    actualizarBotonEnvio(false);
+                }
+            };
+
+            actualizarBotonEnvio(false);
+
+            // 2. LÁPIZ DE EDICIÓN RESILIENTE (se conserva la lógica existente)
+            const originalAgregarMensajeUI = agregarMensajeUI;
+            agregarMensajeUI = function(rol, texto, razonamiento, adjuntos) {
+                originalAgregarMensajeUI(rol, texto, razonamiento, adjuntos);
+
+                if (rol === 'user') {
+                    const container = document.getElementById('chat-history');
+                    const row = container.lastElementChild;
+
+                    if (row && row.classList.contains('user')) {
+                        const btnEdit = document.createElement('button');
+                        btnEdit.className = 'btn-edit-prompt';
+                        btnEdit.innerHTML = '✏️';
+                        btnEdit.title = 'Editar este mensaje';
+
+                        btnEdit.onclick = function() {
+                            const chatActual = obtenerChatActual();
+                            if (!chatActual) return;
+
+                            const targetText = (texto || '').trim();
+                            const idx = chatActual.messages.findIndex(m =>
+                                m.role === 'user' &&
+                                ((m.displayContent || '').trim() === targetText || (m.content || '').trim() === targetText)
+                            );
+
+                            if (idx !== -1) {
+                                chatActual.messages.splice(idx);
+                                guardarEnLocal();
+                            } else {
+                                chatActual.messages.pop();
+                                guardarEnLocal();
+                            }
+
+                            const input = document.getElementById('user-input');
+                            input.value = texto;
+                            autoResize(input);
+                            input.focus();
+                            renderizarMensajesActuales();
+                        };
+                        row.appendChild(btnEdit);
+                    }
+                }
+            };
+
+            // Inyectar lápices en historiales viejos al cargar la app.
+            setTimeout(() => {
+                if (obtenerChatActual()?.messages.length > 0) {
+                    renderizarMensajesActuales();
+                }
+            }, 600);
+        })();
+    </script>
+
+<!-- ==========================================
+         MÓDULO FINAL: AJUSTES DE UI Y MODALES LATERALES
+         ========================================== -->
+    <style>
+
+        /* 2. Estilos para las ventanas de renombrar/eliminar chat */
+        .elix-modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.7); z-index: 99999;
+            display: flex; align-items: center; justify-content: center;
+            backdrop-filter: blur(4px);
+        }
+        .elix-modal-box {
+            background: #18181b; padding: 24px; border-radius: 12px;
+            border: 1px solid #3f3f46; width: 320px; display: flex;
+            flex-direction: column; gap: 16px; box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+            font-family: inherit;
+        }
+    </style>
+
+    <script>
+        (function() {
+            // 3. Interceptar a la fuerza los clics del menú lateral (Fase de Captura)
+            // Esto anula el código roto anterior y hace que el lápiz y la papelera funcionen.
+            document.addEventListener('click', function(e) {
+                const btnRenombrar = e.target.closest('[onclick*="renombrar"]');
+                const btnEliminar = e.target.closest('[onclick*="eliminar"]');
+
+                if (btnRenombrar) {
+                    e.preventDefault();
+                    e.stopPropagation(); // Detiene el error nativo de Electron
+                    
+                    // Extrae el ID del chat
+                    const match = btnRenombrar.getAttribute('onclick').match(/['"]([^'"]+)['"]/);
+                    if (match) mostrarModalRenombrar(match[1]);
+                    return;
+                }
+
+                if (btnEliminar) {
+                    e.preventDefault();
+                    e.stopPropagation(); // Detiene el error nativo de Electron
+                    
+                    const match = btnEliminar.getAttribute('onclick').match(/['"]([^'"]+)['"]/);
+                    if (match) mostrarModalEliminar(match[1]);
+                    return;
+                }
+            }, true); // 'true' asegura que atrapemos el clic antes de que el HTML original actúe
+
+            function mostrarModalRenombrar(id) {
+                const chat = chats.find(c => c.id === id);
+                if (!chat) return;
+
+                const overlay = document.createElement('div');
+                overlay.className = 'elix-modal-overlay';
+                overlay.innerHTML = `
+                    <div class="elix-modal-box">
+                        <h3 style="margin:0;color:#fafafa;font-size:1.05rem;">Renombrar Análisis</h3>
+                        <input type="text" id="modal-input-nombre" value="${chat.title}" style="width:100%;background:#09090b;border:1px solid #3f3f46;color:#fafafa;padding:12px;border-radius:8px;outline:none;">
+                        <div style="display:flex;justify-content:flex-end;gap:12px;">
+                            <button id="modal-btn-cancelar" style="background:transparent;color:#a1a1aa;border:none;padding:8px 16px;cursor:pointer;">Cancelar</button>
+                            <button id="modal-btn-guardar" style="background:#3b82f6;color:white;border:none;padding:8px 16px;cursor:pointer;border-radius:6px;">Guardar</button>
+                        </div>
+                    </div>
+                `;
+                document.body.appendChild(overlay);
+
+                const input = document.getElementById('modal-input-nombre');
+                input.focus(); 
+                input.select();
+
+                document.getElementById('modal-btn-cancelar').onclick = () => overlay.remove();
+                document.getElementById('modal-btn-guardar').onclick = () => {
+                    if (input.value.trim()) {
+                        chat.title = input.value.trim();
+                        guardarEnLocal();
+                        renderizarListaChats();
+                    }
+                    overlay.remove();
+                };
+            }
+
+            function mostrarModalEliminar(id) {
+                const overlay = document.createElement('div');
+                overlay.className = 'elix-modal-overlay';
+                overlay.innerHTML = `
+                    <div class="elix-modal-box">
+                        <h3 style="margin:0;color:#fafafa;font-size:1.05rem;">Eliminar Análisis</h3>
+                        <p style="margin:0;color:#a1a1aa;font-size:0.95rem;">¿Estás seguro? Esta acción no se puede deshacer.</p>
+                        <div style="display:flex;justify-content:flex-end;gap:12px;">
+                            <button id="modal-btn-cancelar2" style="background:transparent;color:#a1a1aa;border:none;padding:8px 16px;cursor:pointer;">Cancelar</button>
+                            <button id="modal-btn-eliminar" style="background:#ef4444;color:white;border:none;padding:8px 16px;cursor:pointer;border-radius:6px;">Eliminar</button>
+                        </div>
+                    </div>
+                `;
+                document.body.appendChild(overlay);
+
+                document.getElementById('modal-btn-cancelar2').onclick = () => overlay.remove();
+                document.getElementById('modal-btn-eliminar').onclick = () => {
+                    chats = chats.filter(c => c.id !== id);
+                    guardarEnLocal();
+                    if (chats.length === 0) crearNuevoChat();
+                    else seleccionarChat(chats[0].id);
+                    overlay.remove();
+                };
+            }
+        })();
+    </script>
+
+<!-- ==========================================
+     MÓDULO MÓVIL Y RESPONSIVE (NATIVE APP FEEL)
+     ========================================== -->
+<style>
+    /* =========================================================
+       RESPONSIVE REFINADO: PC + ANDROID / CELULAR
+       Solo cambia presentación; no altera APIs ni datos.
+       ========================================================= */
+    *, *::before, *::after { box-sizing: border-box; }
+
+    html, body { width: 100%; max-width: 100%; }
+
+    body {
+        padding-top: env(safe-area-inset-top);
+        padding-bottom: env(safe-area-inset-bottom);
+        overscroll-behavior-y: none;
+        overflow: hidden;
+    }
+
+    .main-content { min-width: 0; }
+
+    /* PC: mantiene el diseño original, pero con medidas algo más respirables. */
+    .chat-container {
+        padding-left: clamp(28px, 7vw, 110px);
+        padding-right: clamp(28px, 7vw, 110px);
+    }
+
+    .message-row { max-width: 1120px; }
+
+    .input-wrapper {
+        padding-left: clamp(28px, 7vw, 110px);
+        padding-right: clamp(28px, 7vw, 110px);
+    }
+
+    .input-box { max-width: 980px; }
+
+    /* El mismo botón cambia de Enviar a Detener mientras genera. */
+    .btn-send.is-stopping {
+        background: #fafafa;
+        color: #09090b;
+        box-shadow: 0 4px 16px rgba(255,255,255,0.12);
+    }
+    .btn-send.is-stopping:hover {
+        background: #e4e4e7;
+        color: #09090b;
+        transform: scale(1.04);
+        box-shadow: 0 6px 18px rgba(255,255,255,0.14);
+    }
+
+    .export-icon { flex-shrink: 0; }
+
+    /* Botón hamburguesa: solo visible en móvil. */
+    .btn-mobile-menu {
+        display: none;
+        background: transparent;
+        border: 0;
+        color: var(--text-primary);
+        width: 40px;
+        height: 40px;
+        border-radius: 10px;
+        font-size: 1.45rem;
+        cursor: pointer;
+        padding: 0;
+        line-height: 1;
+        flex-shrink: 0;
+    }
+    .btn-mobile-menu:active { background: #18181b; }
+
+    @media (max-width: 768px) {
+        html, body { height: 100%; }
+        body { height: 100dvh; }
+        .main-content { height: 100dvh; width: 100%; }
+
+        /* Sidebar tipo drawer. */
+        .sidebar {
+            position: fixed;
+            top: 0;
+            left: -100%;
+            width: min(86vw, 310px);
+            height: 100dvh;
+            padding-top: env(safe-area-inset-top);
+            padding-bottom: env(safe-area-inset-bottom);
+            z-index: 99999;
+            box-shadow: 12px 0 34px rgba(0,0,0,0.72);
+            transition: left 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .sidebar.open { left: 0; }
+        .sidebar-header { padding: 16px 14px 10px; }
+        .chat-list { padding: 0 8px 16px; }
+        .chat-item { padding: 11px 12px; }
+        .chat-actions { opacity: 1; }
+
+        .mobile-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.62);
+            z-index: 99998;
+            backdrop-filter: blur(3px);
+            -webkit-backdrop-filter: blur(3px);
+        }
+        .mobile-overlay.open { display: block; }
+
+        /* Header compacto: deja más pantalla para el chat. */
+        .top-bar {
+            min-height: 56px;
+            padding: 8px 10px;
+            gap: 8px;
+        }
+        .btn-mobile-menu { display: inline-flex; align-items: center; justify-content: center; }
+        .app-title {
+            flex: 1;
+            min-width: 0;
+            font-size: 1.05rem;
+            gap: 6px;
+            white-space: nowrap;
+        }
+        .app-title::before { font-size: 1.05rem; }
+        .btn-export-main {
+            min-height: 38px;
+            padding: 7px 10px;
+            font-size: 0.78rem;
+            gap: 6px;
+            white-space: nowrap;
+        }
+        .dropdown-content {
+            position: fixed;
+            top: 58px;
+            right: 10px;
+            min-width: 210px;
+        }
+
+        /* Conversación: más ancho útil y menos bordes/espacios desperdiciados. */
+        .chat-container {
+            padding: 14px 10px 10px;
+            gap: 14px;
+            align-items: stretch;
+        }
+        .chat-container::after { min-height: 18px; }
+        .message-row {
+            gap: 0;
+            max-width: 100%;
+            align-items: flex-start;
+        }
+        .avatar { display: none; }
+        .message-content {
+            max-width: 94%;
+            padding: 11px 13px;
+            border-radius: 14px;
+            font-size: 0.92rem;
+            line-height: 1.58;
+            overflow-wrap: anywhere;
+        }
+        .user .message-content { border-top-right-radius: 5px; }
+        .ai .message-content { border-top-left-radius: 5px; }
+        .message-content p { margin-bottom: 10px; }
+        .message-content h1,
+        .message-content h2,
+        .message-content h3 {
+            margin-top: 16px;
+            margin-bottom: 8px;
+        }
+        .message-content th,
+        .message-content td { padding: 9px 10px; }
+        .thinking-box {
+            margin-bottom: 12px;
+            padding: 11px 12px;
+            font-size: 0.84rem;
+        }
+        .thinking-text { margin-top: 10px; font-size: 0.8rem; }
+
+        /* En móvil no existe hover fiable: el lápiz queda accesible sin estorbar. */
+        .btn-edit-prompt {
+            opacity: 1;
+            width: 30px;
+            height: 30px;
+            margin: 6px 0 0 6px;
+            font-size: 0.78rem;
+        }
+
+        /* Composer compacto: selectores en una sola fila desplazable. */
+        .input-wrapper {
+            padding: 7px 10px calc(10px + env(safe-area-inset-bottom));
+            background: linear-gradient(to top, rgba(0,0,0,1) 68%, rgba(0,0,0,0.92) 84%, transparent);
+        }
+        .input-box {
+            width: 100%;
+            max-width: none;
+            padding: 9px 10px 10px;
+            gap: 8px;
+            border-radius: 18px;
+        }
+        .input-controls {
+            justify-content: flex-start;
+            padding-bottom: 8px;
+            overflow-x: auto;
+            overflow-y: hidden;
+            scrollbar-width: none;
+        }
+        .input-controls::-webkit-scrollbar { display: none; }
+        .control-group {
+            width: max-content;
+            min-width: 100%;
+            flex-direction: row;
+            align-items: center;
+            justify-content: flex-start;
+            gap: 8px;
+            font-size: 0;
+        }
+        .control-group > span { display: none; }
+        .control-group > div {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            white-space: nowrap;
+            font-size: 0;
+        }
+        .control-group > div:first-child::before,
+        .control-group > div:nth-of-type(2)::before {
+            font-size: 0.72rem;
+            color: #71717a;
+            font-weight: 600;
+        }
+        .control-group > div:first-child::before { content: 'Citas'; }
+        .control-group > div:nth-of-type(2)::before { content: 'Análisis'; }
+        select {
+            width: auto;
+            max-width: 155px;
+            min-height: 34px;
+            padding: 6px 9px;
+            border-radius: 9px;
+            font-size: 0.78rem;
+        }
+
+        .textarea-container { gap: 8px; align-items: flex-end; }
+        textarea {
+            min-width: 0;
+            min-height: 40px;
+            max-height: 120px;
+            padding: 8px 0 7px;
+            font-size: 16px; /* evita zoom automático en WebView/iOS */
+            line-height: 1.42;
+        }
+        .btn-icon {
+            width: 40px;
+            height: 40px;
+            min-width: 40px;
+            border-radius: 11px;
+            font-size: 1.05rem;
+        }
+        .btn-send {
+            width: 42px;
+            height: 42px;
+            min-width: 42px;
+        }
+
+        /* Estado encima del composer, sin cubrir controles. */
+        .system-status {
+            top: -31px !important;
+            max-width: calc(100vw - 24px);
+            padding: 6px 11px;
+            gap: 7px;
+            font-size: 0.72rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .spinner { width: 13px; height: 13px; flex-shrink: 0; }
+
+        .elix-modal-box {
+            width: calc(100vw - 32px);
+            max-width: 360px;
+            padding: 18px;
+        }
+    }
+
+    @media (max-width: 520px) {
+        .export-label { display: none; }
+        .btn-export-main {
+            width: 40px;
+            height: 40px;
+            padding: 0;
+            justify-content: center;
+            border-radius: 12px;
+        }
+        .app-title { font-size: 1rem; }
+        .message-content { max-width: 96%; }
+    }
+
+    @media (max-width: 380px) {
+        .top-bar { padding-left: 6px; padding-right: 6px; gap: 5px; }
+        .input-wrapper { padding-left: 7px; padding-right: 7px; }
+        .chat-container { padding-left: 7px; padding-right: 7px; }
+        .control-group { gap: 6px; }
+        select { max-width: 138px; font-size: 0.74rem; }
+        .control-group > div:first-child::before,
+        .control-group > div:nth-of-type(2)::before { display: none; }
+    }
+</style>
+
+<script>
+    (function() {
+        // Mejorar la etiqueta meta viewport para bloquear zoom táctil en la app
+        const metaViewport = document.querySelector('meta[name="viewport"]');
+        if(metaViewport) {
+            metaViewport.content = "width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover";
+        }
+
+        // Inyectar botón de menú en la barra superior
+        const topBar = document.querySelector('.top-bar');
+        const titleElement = document.querySelector('.app-title');
+        
+        const menuBtn = document.createElement('button');
+        menuBtn.className = 'btn-mobile-menu';
+        menuBtn.innerHTML = '☰';
+        topBar.insertBefore(menuBtn, titleElement);
+
+        // Crear el overlay para cerrar el menú tocando fuera
+        const overlay = document.createElement('div');
+        overlay.className = 'mobile-overlay';
+        document.body.appendChild(overlay);
+
+        const sidebar = document.querySelector('.sidebar');
+
+        // Lógica para abrir/cerrar
+        function toggleMenu() {
+            sidebar.classList.toggle('open');
+            overlay.classList.toggle('open');
+        }
+
+        menuBtn.addEventListener('click', toggleMenu);
+        overlay.addEventListener('click', toggleMenu);
+
+        // Cerrar menú automáticamente al elegir un chat o crear uno nuevo en el celular
+        const originalSeleccionarChat = seleccionarChat;
+        window.seleccionarChat = function(id) {
+            originalSeleccionarChat(id);
+            if (window.innerWidth <= 768) {
+                sidebar.classList.remove('open');
+                overlay.classList.remove('open');
+            }
+        };
+
+        window.addEventListener('resize', () => {
+            if (window.innerWidth > 768) {
+                sidebar.classList.remove('open');
+                overlay.classList.remove('open');
+            }
+        });
+    })();
+</script>
+<!-- =========================================================
+     ELIX PRO — MÓDULO ACOPLADO 2026
+     - Gemini fijo: 3.1 Flash Lite vía backend Netlify
+     - PDF como única exportación
+     - APIs privadas protegidas en Netlify Functions
+     - Sidebar contraíble en PC
+     - Aviso de IA + Acuerdo de uso/licencia
+     - Firebase Authentication usuario/contraseña
+     ========================================================= -->
+<style>
+    /* ---- Sidebar contraíble en PC ---- */
+    .btn-sidebar-toggle {
+        display: none;
+        width: 40px;
+        height: 40px;
+        border-radius: 10px;
+        border: 1px solid var(--border-color);
+        background: rgba(24,24,27,.78);
+        color: var(--text-primary);
+        cursor: pointer;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.1rem;
+        flex-shrink: 0;
+    }
+    .btn-sidebar-toggle:hover { background:#27272a; border-color:#3f3f46; }
+
+    @media (min-width: 769px) {
+        .btn-sidebar-toggle { display:inline-flex; }
+        .sidebar.desktop-collapsed {
+            width: 0 !important;
+            min-width: 0 !important;
+            border-right: 0 !important;
+            overflow: hidden !important;
+        }
+    }
+
+    /* ---- Mensaje de responsabilidad bajo el composer ---- */
+    .elix-ai-disclaimer {
+        width: 100%;
+        max-width: 980px;
+        margin-top: 9px;
+        text-align: center;
+        color: #71717a;
+        font-size: .72rem;
+        line-height: 1.35;
+        user-select: none;
+    }
+    .elix-ai-disclaimer button {
+        border: 0;
+        background: none;
+        padding: 0;
+        color: #a1a1aa;
+        cursor: pointer;
+        text-decoration: underline;
+        font: inherit;
+    }
+
+    /* ---- Cuenta / licencia en sidebar ---- */
+    .elix-account-panel {
+        flex-shrink: 0;
+        border-top: 1px solid var(--border-color);
+        padding: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        background: rgba(9,9,11,.96);
+    }
+    .elix-account-name {
+        color: #d4d4d8;
+        font-size: .78rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .elix-account-actions { display:flex; gap:7px; }
+    .elix-account-actions button {
+        flex:1;
+        border:1px solid #27272a;
+        color:#a1a1aa;
+        background:#18181b;
+        padding:7px 8px;
+        border-radius:8px;
+        font-size:.72rem;
+        cursor:pointer;
+    }
+    .elix-account-actions button:hover { color:#fff; background:#27272a; }
+
+    /* ---- Login Firebase ---- */
+    .elix-auth-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 2147483000;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        background: radial-gradient(circle at top right, #111827 0, #050505 42%, #000 100%);
+    }
+    .elix-auth-overlay.open { display:flex; }
+    .elix-auth-card {
+        width: min(430px, 100%);
+        background: rgba(9,9,11,.96);
+        border: 1px solid #27272a;
+        border-radius: 20px;
+        box-shadow: 0 30px 90px rgba(0,0,0,.58);
+        padding: 26px;
+    }
+    .elix-auth-logo { font-size:1.35rem; font-weight:700; margin-bottom:4px; }
+    .elix-auth-sub { color:#71717a; font-size:.85rem; margin-bottom:20px; }
+    .elix-auth-card label { display:block; color:#a1a1aa; font-size:.78rem; margin:12px 0 6px; }
+    .elix-auth-card input[type="text"],
+    .elix-auth-card input[type="password"] {
+        width:100%;
+        background:#0a0a0b;
+        border:1px solid #27272a;
+        color:#fafafa;
+        padding:12px 13px;
+        border-radius:10px;
+        outline:none;
+        font:inherit;
+    }
+    .elix-auth-card input:focus { border-color:#3b82f6; box-shadow:0 0 0 3px rgba(59,130,246,.12); }
+    .elix-auth-accept { display:flex; gap:9px; align-items:flex-start; color:#a1a1aa; font-size:.76rem; line-height:1.4; margin:14px 0; }
+    .elix-auth-accept input { margin-top:2px; }
+    .elix-auth-accept button { background:none; border:0; color:#60a5fa; padding:0; cursor:pointer; font:inherit; text-decoration:underline; }
+    .elix-auth-primary {
+        width:100%; border:0; border-radius:10px; padding:12px 14px;
+        background:#2563eb; color:white; font-weight:700; cursor:pointer;
+    }
+    .elix-auth-primary:disabled { opacity:.55; cursor:not-allowed; }
+    .elix-auth-toggle {
+        width:100%; border:0; background:none; color:#a1a1aa; cursor:pointer;
+        padding:12px 0 0; font-size:.8rem;
+    }
+    .elix-auth-error { min-height:18px; color:#f87171; font-size:.76rem; margin-top:10px; }
+
+    /* ---- Legal ---- */
+    .elix-legal-overlay {
+        position:fixed; inset:0; z-index:2147483500; display:flex; align-items:center; justify-content:center;
+        background:rgba(0,0,0,.78); backdrop-filter:blur(5px); padding:20px;
+    }
+    .elix-legal-box {
+        width:min(720px,100%); max-height:min(82vh,760px); overflow:auto;
+        background:#111113; border:1px solid #3f3f46; border-radius:16px; padding:24px;
+        color:#d4d4d8; box-shadow:0 24px 80px rgba(0,0,0,.62);
+    }
+    .elix-legal-box h2 { margin:0 0 12px; color:#fafafa; }
+    .elix-legal-box h3 { color:#fafafa; margin:18px 0 6px; font-size:.95rem; }
+    .elix-legal-box p { color:#a1a1aa; line-height:1.62; font-size:.86rem; }
+    .elix-legal-close { float:right; border:1px solid #3f3f46; background:#18181b; color:#fff; border-radius:8px; padding:7px 10px; cursor:pointer; }
+
+    /* ---- Documento exclusivo para impresión/PDF ---- */
+    #elix-print-root { display:none; }
+    @media print {
+        @page { size: A4; margin: 18mm 18mm 20mm; }
+        html, body { height:auto !important; overflow:visible !important; background:#fff !important; color:#000 !important; }
+        body > *:not(#elix-print-root) { display:none !important; }
+        #elix-print-root {
+            display:block !important;
+            position:static !important;
+            width:100% !important;
+            color:#000 !important;
+            background:#fff !important;
+            font-family:"Times New Roman", serif;
+            font-size:11.5pt;
+            line-height:1.5;
+        }
+        #elix-print-root h1 { font-size:18pt; margin:0 0 18pt; color:#000 !important; }
+        #elix-print-root h2, #elix-print-root h3 { color:#000 !important; break-after:avoid; }
+        #elix-print-root .elix-pdf-answer { break-inside:auto; margin:0 0 18pt; }
+        #elix-print-root .elix-pdf-answer + .elix-pdf-answer { border-top:1px solid #bbb; padding-top:14pt; }
+        #elix-print-root table { border-collapse:collapse; width:100%; }
+        #elix-print-root th, #elix-print-root td { border:1px solid #777; padding:5pt; color:#000 !important; }
+        #elix-print-root pre, #elix-print-root code { white-space:pre-wrap; color:#000 !important; }
+        #elix-print-root a { color:#000 !important; text-decoration:underline; }
+    }
+
+    @media (max-width:768px) {
+        .elix-ai-disclaimer { font-size:.66rem; margin-top:6px; padding:0 4px; }
+        .elix-account-panel { padding-bottom:calc(12px + env(safe-area-inset-bottom)); }
+    }
+
+    /* ---- Adjuntos de chat / Elix Mini O1 ---- */
+    .elix-attachment-tray {
+        width:100%;
+        display:none;
+        flex-wrap:wrap;
+        gap:8px;
+        padding:2px 0 2px;
+    }
+    .elix-attachment-tray.has-files { display:flex; }
+    .elix-attachment-card {
+        max-width:240px;
+        display:flex;
+        align-items:center;
+        gap:8px;
+        padding:8px 10px;
+        border:1px solid #27272a;
+        border-radius:12px;
+        background:#111113;
+        color:#d4d4d8;
+        font-size:.78rem;
+    }
+    .elix-attachment-thumb {
+        width:36px;
+        height:36px;
+        border-radius:8px;
+        object-fit:cover;
+        border:1px solid #27272a;
+        flex:0 0 auto;
+    }
+    .elix-attachment-icon {
+        width:36px;
+        height:36px;
+        border-radius:8px;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        background:#18181b;
+        flex:0 0 auto;
+        font-size:1.05rem;
+    }
+    .elix-attachment-meta { min-width:0; flex:1; }
+    .elix-attachment-name {
+        white-space:nowrap;
+        overflow:hidden;
+        text-overflow:ellipsis;
+        color:#fafafa;
+        font-weight:600;
+    }
+    .elix-attachment-size { color:#71717a; font-size:.68rem; margin-top:2px; }
+    .elix-attachment-remove {
+        border:0;
+        background:transparent;
+        color:#71717a;
+        cursor:pointer;
+        font-size:1rem;
+        padding:2px;
+    }
+    .elix-attachment-remove:hover { color:#f87171; }
+    .elix-message-attachments {
+        display:flex;
+        flex-wrap:wrap;
+        gap:6px;
+        margin:0 0 10px;
+    }
+    .elix-message-file {
+        display:inline-flex;
+        align-items:center;
+        max-width:260px;
+        padding:6px 9px;
+        border:1px solid #3f3f46;
+        border-radius:10px;
+        background:#18181b;
+        color:#d4d4d8;
+        font-size:.74rem;
+        white-space:nowrap;
+        overflow:hidden;
+        text-overflow:ellipsis;
+    }
+
+</style>
+
+<script>
+(function(){
+    'use strict';
+
+    /* =========================================================
+       A) GEMINI 3.1 FLASH LITE — VÍA BACKEND NETLIFY
+       ========================================================= */
+    async function llamarGeminiConFallback(payload, etiqueta = 'Gemini') {
+        // Se conserva el nombre por compatibilidad con el resto del archivo,
+        // pero ya no hay fallback: TODO Gemini usa gemini-3.1-flash-lite en Netlify.
+        const data = await elixBackground('gemini-generate', { payload }, { etiqueta });
+        const texto = data?.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('') || '';
+        if (!texto.trim() && !data?.candidates?.length) {
+            throw new Error(`${etiqueta}: Gemini devolvió una respuesta vacía.`);
+        }
+        return { data, model: ELIX_GEMINI_MODEL, text: texto };
+    }
+    window.llamarGeminiConFallback = llamarGeminiConFallback;
+
+    window.elixFlashEvaluaBusqueda = async function(query, academicMode) {
+        const q = String(query || '').trim();
+        const qLower = q.toLowerCase();
+        const modo = String(academicMode || 'none').toLowerCase();
+
+        const soloFuentesAportadas =
+            /(solo|únicamente|unicamente|exclusivamente).{0,40}(bibliograf[ií]a|fuentes|referencias).{0,50}(proporcionad|adjunt|incluid|dadas)/i.test(q) ||
+            /(no|sin).{0,20}(buscar|b[uú]squeda|internet|web).{0,30}(fuera|extern|adicional)/i.test(q);
+
+        if (soloFuentesAportadas) return false;
+        if (modo !== 'none') return true;
+
+        const señalesWeb = [
+            'internet','web','buscar','busca','investiga','investigar',
+            'fuente','fuentes','bibliografía','bibliografia','referencia','referencias',
+            'artículo','articulo','paper','papers','doi','revista','journal',
+            'actual','actualizado','actualizada','reciente','recientes','último','ultimo',
+            'noticia','noticias','hoy','este año','2026'
+        ];
+        if (señalesWeb.some(x => qLower.includes(x))) return true;
+
+        try {
+            const prompt = `Actúa como un enrutador de búsqueda web.
+Responde ÚNICAMENTE SI o NO.
+Responde SI si la solicitud necesita información externa, bibliografía, datos actuales o verificación en internet.
+Solicitud: ${q}`;
+            const r = await llamarGeminiConFallback({
+                contents:[{parts:[{text:prompt}]}],
+                generationConfig:{temperature:0, maxOutputTokens:8}
+            }, 'Router Gemini');
+            return (r.text || '').trim().toUpperCase().startsWith('SI');
+        } catch (e) {
+            console.warn('Router Gemini no disponible; la consulta continuará sin bloquearse.', e);
+            return false;
+        }
+    };
+
+    window.generarQueryBusqueda = async function(query) {
+        try {
+            const prompt = `Extrae únicamente hasta 6 palabras clave principales de búsqueda académica/web, en español o inglés. No agregues explicaciones ni comillas. Solicitud: ${query}`;
+            const r = await llamarGeminiConFallback({
+                contents:[{parts:[{text:prompt}]}],
+                generationConfig:{temperature:0.1, maxOutputTokens:40}
+            }, 'Query Gemini');
+            return r.text.trim() || query;
+        } catch (e) {
+            console.warn('No se pudo optimizar la query; se usará la consulta original.', e);
+            return query;
+        }
+    };
+
+    function archivoADataURL(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = () => reject(reader.error || new Error('No se pudo leer el archivo.'));
+            reader.readAsDataURL(file);
+        });
+    }
+
+    window.procesarArchivoConGemini = async function(event) {
+        const file = event.target.files?.[0];
+        if (!file) return;
+        setCargando(true, `✨ Elix Flash extrayendo datos de ${file.name}...`);
+        try {
+            const dataUrl = await archivoADataURL(file);
+            const base64Data = String(dataUrl).split(',')[1] || '';
+            const mimeType = file.type || 'application/octet-stream';
+            const r = await llamarGeminiConFallback({
+                contents:[{parts:[
+                    {text:'Eres un extractor de precisión. Extrae TODO el contenido útil del documento sin resumir ni omitir: texto, tablas, ecuaciones, unidades, encabezados, referencias y datos. Conserva ecuaciones en LaTeX puro. Devuelve texto limpio y completo.'},
+                    {inlineData:{data:base64Data, mimeType}}
+                ]}],
+                generationConfig:{temperature:0}
+            }, 'Lectura de archivo');
+
+            const inputField = document.getElementById('user-input');
+            inputField.value += `[Contexto del documento ${file.name} extraído por Elix Flash (${r.model})]:\n${r.text}\n\n`;
+            autoResize(inputField);
+            alert(`Archivo extraído correctamente con ${r.model}.`);
+        } catch(error) {
+            console.error(error);
+            alert(`No se pudo procesar el archivo: ${error.message || error}`);
+        } finally {
+            setCargando(false);
+            event.target.value = '';
+        }
+    };
+
+    /* =========================================================
+       A2) ELIX MINI O1 (GROQ) — SOLO PARA ARCHIVOS ADJUNTOS
+       ========================================================= */
+    const ELIX_GROQ_MODELS = (typeof GROQ_MODELS_FALLBACK !== 'undefined' && Array.isArray(GROQ_MODELS_FALLBACK))
+        ? GROQ_MODELS_FALLBACK
+        : ['qwen/qwen3.8-27b','openai/gpt-oss-120b','openai/gpt-oss-20b'];
+
+    let elixAdjuntosPendientes = [];
+    let elixMiniProcesando = false;
+    const elixPreviewUrls = new Map();
+
+    function elixGroqConfigurado(){
+        return true; // La clave se valida en la función Netlify groq-chat.
+    }
+
+    function elixExtension(nombre=''){
+        const limpio=String(nombre||'').toLowerCase();
+        const punto=limpio.lastIndexOf('.');
+        return punto>=0 ? limpio.slice(punto+1) : '';
+    }
+
+    function elixTamano(bytes){
+        const n=Number(bytes||0);
+        if(n<1024) return `${n} B`;
+        if(n<1024*1024) return `${(n/1024).toFixed(1)} KB`;
+        return `${(n/(1024*1024)).toFixed(1)} MB`;
+    }
+
+    function elixIconoArchivo(file){
+        if(String(file.type||'').startsWith('image/')) return '🖼️';
+        const ext=elixExtension(file.name);
+        if(ext==='pdf') return '📕';
+        if(ext==='docx') return '📘';
+        if(ext==='pptx') return '📙';
+        if(ext==='xlsx'||ext==='xls'||ext==='csv') return '📗';
+        return '📄';
+    }
+
+    function elixCrearBandejaAdjuntos(){
+        let tray=document.getElementById('elix-attachment-tray');
+        if(tray) return tray;
+        const textareaContainer=document.querySelector('.textarea-container');
+        if(!textareaContainer) return null;
+        tray=document.createElement('div');
+        tray.id='elix-attachment-tray';
+        tray.className='elix-attachment-tray';
+        textareaContainer.parentNode.insertBefore(tray, textareaContainer);
+        return tray;
+    }
+
+    function elixLiberarPreview(file){
+        const url=elixPreviewUrls.get(file);
+        if(url){
+            try { URL.revokeObjectURL(url); } catch(_){}
+            elixPreviewUrls.delete(file);
+        }
+    }
+
+    function elixRenderAdjuntos(){
+        const tray=elixCrearBandejaAdjuntos();
+        if(!tray) return;
+        tray.innerHTML='';
+        tray.classList.toggle('has-files', elixAdjuntosPendientes.length>0);
+
+        elixAdjuntosPendientes.forEach((file, index)=>{
+            const card=document.createElement('div');
+            card.className='elix-attachment-card';
+
+            let visual='';
+            if(String(file.type||'').startsWith('image/')){
+                let url=elixPreviewUrls.get(file);
+                if(!url){
+                    url=URL.createObjectURL(file);
+                    elixPreviewUrls.set(file,url);
+                }
+                visual=`<img class="elix-attachment-thumb" src="${url}" alt="">`;
+            } else {
+                visual=`<div class="elix-attachment-icon">${elixIconoArchivo(file)}</div>`;
+            }
+
+            card.innerHTML=`${visual}<div class="elix-attachment-meta"><div class="elix-attachment-name" title="${escapeHTML(file.name)}">${escapeHTML(file.name)}</div><div class="elix-attachment-size">${elixTamano(file.size)}</div></div><button class="elix-attachment-remove" type="button" title="Quitar archivo" aria-label="Quitar archivo">×</button>`;
+            card.querySelector('.elix-attachment-remove').onclick=()=>{
+                const quitado=elixAdjuntosPendientes[index];
+                if(quitado) elixLiberarPreview(quitado);
+                elixAdjuntosPendientes.splice(index,1);
+                elixRenderAdjuntos();
+            };
+            tray.appendChild(card);
+        });
+    }
+
+    window.elixSeleccionarArchivos = function(event){
+        const nuevos=Array.from(event.target.files || []);
+        for(const file of nuevos){
+            const duplicado=elixAdjuntosPendientes.some(f=>f.name===file.name && f.size===file.size && f.lastModified===file.lastModified);
+            if(!duplicado) elixAdjuntosPendientes.push(file);
+        }
+        event.target.value='';
+        elixRenderAdjuntos();
+    };
+
+    function elixLimpiarAdjuntosPendientes(){
+        elixAdjuntosPendientes.forEach(elixLiberarPreview);
+        elixAdjuntosPendientes=[];
+        elixRenderAdjuntos();
+    }
+
+    function elixArchivoADataURLMini(file){
+        return new Promise((resolve,reject)=>{
+            const reader=new FileReader();
+            reader.onload=()=>resolve(String(reader.result||''));
+            reader.onerror=()=>reject(reader.error || new Error(`No se pudo leer ${file.name}`));
+            reader.readAsDataURL(file);
+        });
+    }
+
+    async function elixLlamarGroqConFallback(messages, etiqueta='Elix Mini O1'){
+        try {
+            const data = await elixBackground('groq-chat', {
+                messages,
+                models: ELIX_GROQ_MODELS,
+                temperature: 0,
+                max_tokens: 8192
+            }, { etiqueta });
+            const salida = String(data?.choices?.[0]?.message?.content || '').trim();
+            if (!salida) throw new Error('Elix Mini O1 devolvió una respuesta vacía.');
+            return { text: salida, model: data.model || 'Groq', data };
+        } catch (error) {
+            if (error && error.name === 'AbortError') throw error;
+            throw new Error(`${etiqueta}: ${error?.message || error}`);
+        }
+    }
+
+    function elixTextoDesdeXML(xmlTexto){
+        const xml=new DOMParser().parseFromString(xmlTexto,'application/xml');
+        if(xml.querySelector('parsererror')) return '';
+        const bloques=[];
+        const elementos=Array.from(xml.getElementsByTagName('*'));
+        const parrafos=elementos.filter(n=>n.localName==='p');
+
+        if(parrafos.length){
+            for(const p of parrafos){
+                const ts=Array.from(p.getElementsByTagName('*')).filter(n=>n.localName==='t');
+                const s=ts.map(n=>n.textContent||'').join('').trim();
+                if(s) bloques.push(s);
+            }
+            return bloques.join('\n');
+        }
+
+        return elementos.filter(n=>n.localName==='t').map(n=>n.textContent||'').join(' ').trim();
+    }
+
+    async function elixExtraerDOCX(file){
+        if(typeof JSZip==='undefined') throw new Error('JSZip no está disponible.');
+        const zip=await JSZip.loadAsync(await file.arrayBuffer());
+        const candidatos=Object.keys(zip.files)
+            .filter(n=>/^word\/(document|footnotes|endnotes|comments|header\d+|footer\d+)\.xml$/i.test(n))
+            .sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
+        const partes=[];
+        for(const nombre of candidatos){
+            const xml=await zip.file(nombre)?.async('string');
+            if(!xml) continue;
+            const t=elixTextoDesdeXML(xml);
+            if(t) partes.push(`[${nombre}]\n${t}`);
+        }
+        return partes.join('\n\n');
+    }
+
+    async function elixExtraerPPTX(file){
+        if(typeof JSZip==='undefined') throw new Error('JSZip no está disponible.');
+        const zip=await JSZip.loadAsync(await file.arrayBuffer());
+        const nombres=Object.keys(zip.files)
+            .filter(n=>/^ppt\/(slides\/slide\d+|notesSlides\/notesSlide\d+)\.xml$/i.test(n))
+            .sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
+        const partes=[];
+        for(const nombre of nombres){
+            const xml=await zip.file(nombre)?.async('string');
+            if(!xml) continue;
+            const t=elixTextoDesdeXML(xml);
+            if(t) partes.push(`[${nombre}]\n${t}`);
+        }
+        return partes.join('\n\n');
+    }
+
+    async function elixExtraerExcel(file){
+        if(typeof XLSX==='undefined') throw new Error('SheetJS/XLSX no está disponible.');
+        const wb=XLSX.read(await file.arrayBuffer(),{type:'array',cellFormula:true,cellText:true,cellDates:true});
+        const partes=[];
+        for(const nombre of wb.SheetNames){
+            const ws=wb.Sheets[nombre];
+            const csv=XLSX.utils.sheet_to_csv(ws,{blankrows:false});
+            const formulas=XLSX.utils.sheet_to_formulae(ws);
+            partes.push(`=== HOJA: ${nombre} ===\n${csv}${formulas.length?`\n\n[FÓRMULAS]\n${formulas.join('\n')}`:''}`);
+        }
+        return partes.join('\n\n');
+    }
+
+    async function elixExtraerPDF(file){
+        if(typeof pdfjsLib==='undefined') throw new Error('PDF.js no está disponible.');
+        try {
+            pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+        } catch(_){}
+        const pdf=await pdfjsLib.getDocument({data:new Uint8Array(await file.arrayBuffer())}).promise;
+        const paginas=[];
+        for(let n=1;n<=pdf.numPages;n++){
+            const page=await pdf.getPage(n);
+            const content=await page.getTextContent();
+            const texto=content.items.map(i=>String(i.str||'')).join(' ').replace(/\s+/g,' ').trim();
+            paginas.push(`=== PÁGINA ${n} ===\n${texto || '[Sin texto extraíble: posible página escaneada o contenido visual]'}`);
+        }
+        return paginas.join('\n\n');
+    }
+
+    async function elixExtraerTextoLocal(file){
+        const ext=elixExtension(file.name);
+        if(ext==='docx') return await elixExtraerDOCX(file);
+        if(ext==='pptx') return await elixExtraerPPTX(file);
+        if(ext==='xlsx'||ext==='xls') return await elixExtraerExcel(file);
+        if(ext==='pdf') return await elixExtraerPDF(file);
+        if(['txt','csv','md','json'].includes(ext) || String(file.type||'').startsWith('text/')) return await file.text();
+        throw new Error(`Formato no soportado para extracción local: ${file.name}`);
+    }
+
+    function elixPartirTexto(texto,maxChars=24000){
+        const s=String(texto||'');
+        if(!s) return [''];
+        const partes=[];
+        let pos=0;
+        while(pos<s.length){
+            let fin=Math.min(pos+maxChars,s.length);
+            if(fin<s.length){
+                const salto=s.lastIndexOf('\n',fin);
+                if(salto>pos+Math.floor(maxChars*.6)) fin=salto;
+            }
+            partes.push(s.slice(pos,fin));
+            pos=fin;
+        }
+        return partes;
+    }
+
+    async function elixProcesarDocumentoConMini(file,solicitud){
+        const bruto=await elixExtraerTextoLocal(file);
+        if(!bruto.trim()) throw new Error(`${file.name} no contiene texto extraíble.`);
+        const partes=elixPartirTexto(bruto);
+        const salidas=[];
+
+        for(let i=0;i<partes.length;i++){
+            setCargando(true,`📎 Elix Mini O1 procesando ${file.name} (${i+1}/${partes.length})...`);
+            const instrucciones=`Actúas como Elix Mini O1, preprocesador documental de alta fidelidad para DeepSeek.
+Tu misión NO es responder todavía la solicitud final del usuario. Debes leer completamente el fragmento del archivo y producir un contexto fiel, estructurado y utilizable por DeepSeek.
+No inventes, no corrijas silenciosamente y no omitas datos, cifras, fórmulas, encabezados, referencias, tablas o relaciones relevantes. Mantén ecuaciones en LaTeX cuando sea posible.
+Archivo: ${file.name}
+Fragmento: ${i+1} de ${partes.length}
+Solicitud posterior del usuario: ${solicitud || 'Analizar el archivo adjunto.'}
+
+CONTENIDO EXTRAÍDO:
+${partes[i]}`;
+
+            const r=await elixLlamarGroqConFallback([
+                {role:'system',content:'Eres Elix Mini O1. Procesas archivos únicamente como etapa previa y entregas contexto documental fiel al motor principal.'},
+                {role:'user',content:instrucciones}
+            ],`Elix Mini O1 · ${file.name}`);
+            salidas.push(`[${file.name} · fragmento ${i+1}/${partes.length} · ${r.model}]\n${r.text}`);
+        }
+
+        return salidas.join('\n\n');
+    }
+
+    async function elixProcesarImagenConMini(file,solicitud){
+        const dataUrl=await elixArchivoADataURLMini(file);
+        setCargando(true,`🖼️ Elix Mini O1 analizando ${file.name}...`);
+
+        const prompt=`Actúas como Elix Mini O1, preprocesador visual para DeepSeek.
+Examina la imagen completa y entrega una descripción/extracción fiel de TODO lo útil: texto visible, tablas, ecuaciones, símbolos, gráficos, diagramas, etiquetas, unidades y relaciones espaciales necesarias para resolver después la solicitud.
+No resuelvas todavía la solicitud final. No inventes información que no sea visible.
+Archivo: ${file.name}
+Solicitud posterior del usuario: ${solicitud || 'Analizar la imagen adjunta.'}`;
+
+        const r=await elixLlamarGroqConFallback([
+            {role:'system',content:'Eres Elix Mini O1. Tu salida será contexto visual para DeepSeek.'},
+            {role:'user',content:[
+                {type:'text',text:prompt},
+                {type:'image_url',image_url:{url:dataUrl}}
+            ]}
+        ],`Elix Mini O1 visual · ${file.name}`);
+
+        return `[${file.name} · ${r.model}]\n${r.text}`;
+    }
+
+    async function elixProcesarAdjuntosConMini(files,solicitud){
+        const resultados=[];
+        for(let i=0;i<files.length;i++){
+            const file=files[i];
+            const esImagen=String(file.type||'').startsWith('image/');
+            const salida=esImagen
+                ? await elixProcesarImagenConMini(file,solicitud)
+                : await elixProcesarDocumentoConMini(file,solicitud);
+            resultados.push(`===== ARCHIVO ${i+1}/${files.length}: ${file.name} =====\n${salida}`);
+        }
+        return resultados.join('\n\n');
+    }
+
+    // Se acopla al enviar existente: si NO hay archivos, el flujo original queda intacto.
+    const elixEnviarMensajeExistente = window.enviarMensaje;
+    window.enviarMensaje = async function(){
+        if(elixMiniProcesando) return;
+
+        if(!elixAdjuntosPendientes.length){
+            return await elixEnviarMensajeExistente();
+        }
+
+        const input=document.getElementById('user-input');
+        const solicitud=(input?.value || '').trim() || 'Analiza los archivos adjuntos.';
+        const snapshot=[...elixAdjuntosPendientes];
+        const metadata=snapshot.map(f=>({name:f.name,size:f.size,type:f.type||'',lastModified:f.lastModified||0}));
+
+        elixMiniProcesando=true;
+        try{
+            setCargando(true,'📎 Elix Mini O1 preparando archivos...');
+            const contexto=await elixProcesarAdjuntosConMini(snapshot,solicitud);
+
+            window.ELIX_CONTEXT_ARCHIVOS_PENDIENTE=contexto;
+            window.ELIX_ADJUNTOS_EN_ENVIO=metadata;
+
+            if(input && !input.value.trim()) input.value=solicitud;
+
+            // Una vez que Mini O1 terminó, los archivos ya están representados por contexto + metadatos.
+            elixLimpiarAdjuntosPendientes();
+            elixMiniProcesando=false;
+            setCargando(false);
+
+            // Desde aquí vuelve al flujo existente (router, Tavily, DeepSeek, PDF, STOP, etc.).
+            return await elixEnviarMensajeExistente();
+        } catch(error){
+            console.error('Elix Mini O1 no pudo procesar los adjuntos:',error);
+            setCargando(false);
+            const detalle=error?.message || String(error);
+            alert(`No se pudieron procesar los adjuntos con Elix Mini O1.\n\n${detalle}`);
+        } finally {
+            elixMiniProcesando=false;
+            window.ELIX_CONTEXT_ARCHIVOS_PENDIENTE='';
+            window.ELIX_ADJUNTOS_EN_ENVIO=[];
+        }
+    };
+
+    elixCrearBandejaAdjuntos();
+
+    /* Word eliminado: PDF es la única exportación. */
+
+    /* =========================================================
+       C) PDF SOLO RESPUESTAS
+       ========================================================= */
+    window.exportarPDFSoloRespuestas = async function() {
+        const chat=obtenerChatActual();
+        const respuestas=(chat?.messages||[]).filter(m=>m.role==='assistant' && (m.content||'').trim());
+        if(!respuestas.length) return alert('No hay respuestas de la IA para exportar a PDF.');
+
+        document.getElementById('elix-print-root')?.remove();
+        const root=document.createElement('div');
+        root.id='elix-print-root';
+        root.innerHTML=`<h1>Elix Pro — Respuestas</h1>` + respuestas.map((m,i)=>`<section class="elix-pdf-answer"><h2>Respuesta ${i+1}</h2>${formatTextoMarkdown(m.content||'')}</section>`).join('');
+        document.body.appendChild(root);
+
+        try {
+            if(window.MathJax?.typesetPromise) await window.MathJax.typesetPromise([root]);
+            if(document.fonts?.ready) await document.fonts.ready;
+            await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+            const cleanup=()=>{ root.remove(); window.removeEventListener('afterprint',cleanup); };
+            window.addEventListener('afterprint',cleanup);
+            window.print();
+            setTimeout(()=>{ if(document.body.contains(root)) root.remove(); },30000);
+        } catch(e) {
+            root.remove();
+            console.error(e);
+            alert('No se pudo preparar el PDF de respuestas.');
+        }
+    };
+
+    /* =========================================================
+       D) SIDEBAR PC + AVISO + LEGAL
+       ========================================================= */
+    function mostrarLegal() {
+        document.querySelector('.elix-legal-overlay')?.remove();
+        const o=document.createElement('div');
+        o.className='elix-legal-overlay';
+        o.innerHTML=`<div class="elix-legal-box">
+            <button class="elix-legal-close" type="button">Cerrar</button>
+            <h2>Acuerdo de uso y licencia — Elix Pro</h2>
+            <p><strong>Versión 1.0.</strong> Elix Pro utiliza modelos de inteligencia artificial y servicios externos. La IA puede cometer errores, omitir contexto o producir información inexacta. Verifica cualquier resultado importante antes de usarlo en decisiones académicas, técnicas, médicas, legales, financieras o de seguridad.</p>
+            <h3>1. Uso permitido</h3><p>Se concede una licencia limitada, revocable, no exclusiva y no transferible para utilizar esta aplicación conforme a la ley y a los términos de los proveedores de las APIs conectadas. No se permite usarla para vulnerar sistemas, infringir derechos de terceros o evadir controles de seguridad.</p>
+            <h3>2. Responsabilidad del usuario</h3><p>El usuario es responsable de las instrucciones que envía, de revisar los resultados y de cumplir las reglas académicas o profesionales que correspondan. El uso de fuentes, citas y respuestas generadas debe verificarse cuando la exactitud sea relevante.</p>
+            <h3>3. APIs y datos</h3><p>Las claves API privadas se almacenan como variables de entorno en Netlify y no se incluyen en este archivo. No compartas las variables privadas ni las expongas en código del navegador.</p>
+            <h3>4. Disponibilidad</h3><p>Los modelos, límites, cuotas y APIs pueden cambiar. Elix usa Gemini 3.1 Flash Lite para las tareas de Gemini y mecanismos de tolerancia a fallos donde corresponde, pero ningún servicio externo garantiza disponibilidad ininterrumpida.</p>
+            <h3>5. Limitación</h3><p>La aplicación se proporciona como herramienta de apoyo. En la medida permitida por la ley, no se garantiza que los resultados sean completos, exactos o adecuados para un propósito concreto.</p>
+            <h3>6. Aceptación</h3><p>Al iniciar sesión o continuar usando Elix Pro, aceptas este acuerdo. Si la legislación aplicable exige autorización de un representante legal para utilizar un servicio, debes contar con ella.</p>
+        </div>`;
+        document.body.appendChild(o);
+        o.querySelector('.elix-legal-close').onclick=()=>o.remove();
+        o.addEventListener('click',e=>{if(e.target===o)o.remove();});
+    }
+    window.mostrarLegalElix=mostrarLegal;
+
+    // Toggle de sidebar en PC.
+    const top=document.querySelector('.top-bar');
+    const title=document.querySelector('.app-title');
+    if(top && title && !document.querySelector('.btn-sidebar-toggle')) {
+        const b=document.createElement('button');
+        b.className='btn-sidebar-toggle';
+        b.type='button';
+        b.title='Contraer o mostrar barra lateral';
+        b.innerHTML='☰';
+        top.insertBefore(b,title);
+        const sidebar=document.querySelector('.sidebar');
+        const apply=collapsed=>{
+            sidebar?.classList.toggle('desktop-collapsed',collapsed);
+            b.setAttribute('aria-expanded',String(!collapsed));
+        };
+        apply(localStorage.getItem('elixSidebarCollapsed')==='1');
+        b.onclick=()=>{
+            const collapsed=!sidebar.classList.contains('desktop-collapsed');
+            apply(collapsed);
+            localStorage.setItem('elixSidebarCollapsed',collapsed?'1':'0');
+        };
+    }
+
+    // Aviso bajo el compositor.
+    const wrapper=document.querySelector('.input-wrapper');
+    if(wrapper && !wrapper.querySelector('.elix-ai-disclaimer')) {
+        const d=document.createElement('div');
+        d.className='elix-ai-disclaimer';
+        d.innerHTML='La IA puede cometer errores. Verifica la información importante. · <button type="button">Acuerdo de uso y licencia</button>';
+        d.querySelector('button').onclick=mostrarLegal;
+        wrapper.appendChild(d);
+    }
+
+    // Panel de cuenta al pie del sidebar.
+    const sidebar=document.querySelector('.sidebar');
+    if(sidebar && !sidebar.querySelector('.elix-account-panel')) {
+        const p=document.createElement('div');
+        p.className='elix-account-panel';
+        p.innerHTML=`<div id="elix-account-name" class="elix-account-name">Cuenta: Firebase pendiente</div><div class="elix-account-actions"><button type="button" id="elix-legal-btn">Licencia</button><button type="button" id="elix-logout-btn" style="display:none">Cerrar sesión</button></div>`;
+        sidebar.appendChild(p);
+        p.querySelector('#elix-legal-btn').onclick=mostrarLegal;
+    }
+
+    /* =========================================================
+       E) FIREBASE AUTH — USUARIO + CONTRASEÑA
+       =========================================================
+       IMPORTANTE: Firebase Auth nativamente autentica email+password.
+       Para ofrecer UX de "usuario + contraseña" sin Google, Elix transforma
+       internamente el username en username@elix.local. No se expone al usuario.
+       ========================================================= */
+    const ELIX_FIREBASE_CONFIG = {
+        apiKey: "AIzaSyC9C8xG_2j8m9ud4N_dZTlW_IpNGSObMag",
+        authDomain: "simulador-sql-1.firebaseapp.com",
+        projectId: "simulador-sql-1",
+        storageBucket: "simulador-sql-1.firebasestorage.app",
+        messagingSenderId: "716599040841",
+        appId: "1:716599040841:web:1909dbb878589483b75898"
+    };
+    const ELIX_AUTH_REQUIRED = true;
+    const ELIX_LICENSE_VERSION = '1.0';
+    const ELIX_LICENSE_SESSION_KEY = 'elixLicenseAcceptedVersion';
+
+    function firebaseConfigLista(){
+        return Object.values(ELIX_FIREBASE_CONFIG).every(v=>String(v||'').trim().length>0);
+    }
+    function normalizarCredencial(valor){
+        return String(valor||'').trim().toLowerCase();
+    }
+    function esEmailValido(valor){
+        return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizarCredencial(valor));
+    }
+    function validarCredencial(valor){
+        const v=normalizarCredencial(valor);
+        return esEmailValido(v) || /^[a-z0-9._-]{3,32}$/.test(v);
+    }
+    function credencialAEmail(valor){
+        const v=normalizarCredencial(valor);
+        return esEmailValido(v) ? v : `${v}@elix.local`;
+    }
+    function nombreUsuarioFirebase(currentUser){
+        if(currentUser?.displayName) return currentUser.displayName;
+        const email=String(currentUser?.email||'');
+        return email.endsWith('@elix.local') ? email.slice(0,-'@elix.local'.length) : email;
+    }
+
+    function crearAuthOverlay(){
+        const existente=document.getElementById('elix-auth-overlay');
+        if(existente) return existente;
+
+        const o=document.createElement('div');
+        // Se abre desde el primer instante: la app permanece bloqueada hasta validar Firebase.
+        o.className='elix-auth-overlay open';
+        o.id='elix-auth-overlay';
+        o.innerHTML=`<div class="elix-auth-card" role="dialog" aria-modal="true" aria-labelledby="elix-auth-title">
+            <div class="elix-auth-logo" id="elix-auth-title">🧬 Elix Pro</div>
+            <div class="elix-auth-sub" id="elix-auth-sub">Inicia sesión para acceder a la aplicación.</div>
+            <form id="elix-auth-form" novalidate>
+                <label for="elix-auth-user">Usuario</label>
+                <input id="elix-auth-user" type="text" autocomplete="username" maxlength="254" placeholder="Tu usuario o correo de Firebase" required>
+                <label for="elix-auth-pass">Contraseña</label>
+                <input id="elix-auth-pass" type="password" autocomplete="current-password" minlength="6" placeholder="Tu contraseña" required>
+                <label class="elix-auth-accept"><input id="elix-auth-terms" type="checkbox" required><span>He leído y acepto el <button type="button" id="elix-auth-legal">Acuerdo de uso y licencia</button> y entiendo que la IA puede cometer errores.</span></label>
+                <button id="elix-auth-submit" class="elix-auth-primary" type="submit" disabled>Iniciar sesión</button>
+                <div id="elix-auth-error" class="elix-auth-error" role="alert" aria-live="polite"></div>
+            </form>
+        </div>`;
+        document.body.appendChild(o);
+        o.querySelector('#elix-auth-legal').onclick=mostrarLegal;
+        return o;
+    }
+
+    async function iniciarFirebaseAuth(){
+        const accountName=document.getElementById('elix-account-name');
+        const logoutBtn=document.getElementById('elix-logout-btn');
+        const overlay=crearAuthOverlay();
+        const form=overlay.querySelector('#elix-auth-form');
+        const user=overlay.querySelector('#elix-auth-user');
+        const pass=overlay.querySelector('#elix-auth-pass');
+        const terms=overlay.querySelector('#elix-auth-terms');
+        const submit=overlay.querySelector('#elix-auth-submit');
+        const sub=overlay.querySelector('#elix-auth-sub');
+        const errorBox=overlay.querySelector('#elix-auth-error');
+
+        // El botón solo se habilita después de marcar expresamente el acuerdo.
+        const actualizarBoton=()=>{
+            submit.disabled=!terms.checked;
+        };
+        terms.addEventListener('change', actualizarBoton);
+        actualizarBoton();
+
+        const bloquearPorConfiguracion=(mensaje)=>{
+            overlay.classList.add('open');
+            user.disabled=true;
+            pass.disabled=true;
+            terms.disabled=true;
+            submit.disabled=true;
+            sub.textContent='El acceso a Elix Pro requiere autenticación Firebase.';
+            errorBox.textContent=mensaje;
+        };
+
+        // A diferencia de la versión anterior, si Firebase no está configurado NO se deja pasar a la app.
+        if(!firebaseConfigLista()) {
+            if(accountName) accountName.textContent='Cuenta: Firebase sin configurar';
+            bloquearPorConfiguracion('Configura ELIX_FIREBASE_CONFIG en el código para habilitar el inicio de sesión.');
+            console.info('Elix Pro bloqueado: falta completar ELIX_FIREBASE_CONFIG.');
+            return;
+        }
+        if(typeof firebase==='undefined') {
+            if(accountName) accountName.textContent='Cuenta: Firebase no pudo cargar';
+            bloquearPorConfiguracion('Firebase Authentication no pudo cargarse. Revisa la conexión o los scripts de Firebase.');
+            console.error('No se cargó Firebase desde el CDN.');
+            return;
+        }
+
+        try {
+            if(!firebase.apps.length) firebase.initializeApp(ELIX_FIREBASE_CONFIG);
+            const auth=firebase.auth();
+
+            // La sesión dura mientras permanezca abierta la sesión del navegador/pestaña.
+            // Así, cada nueva sesión requiere volver a autenticar y aceptar la licencia.
+            await auth.setPersistence(firebase.auth.Auth.Persistence.SESSION);
+
+            form.onsubmit=async(e)=>{
+                e.preventDefault();
+                errorBox.textContent='';
+
+                const credencial=normalizarCredencial(user.value);
+                const password=pass.value;
+
+                if(!validarCredencial(credencial)) {
+                    errorBox.textContent='Escribe un usuario válido o el correo registrado en Firebase.';
+                    return;
+                }
+                if(password.length<6) {
+                    errorBox.textContent='La contraseña debe tener al menos 6 caracteres.';
+                    return;
+                }
+                if(!terms.checked) {
+                    errorBox.textContent='Debes marcar la casilla y aceptar el acuerdo de uso y licencia antes de iniciar sesión.';
+                    actualizarBoton();
+                    return;
+                }
+
+                submit.disabled=true;
+                submit.textContent='Validando...';
+                sessionStorage.removeItem(ELIX_LICENSE_SESSION_KEY);
+
+                try {
+                    // Se marca antes de autenticar para que onAuthStateChanged pueda validar la aceptación
+                    // en el mismo instante en que Firebase confirma las credenciales.
+                    sessionStorage.setItem(ELIX_LICENSE_SESSION_KEY, ELIX_LICENSE_VERSION);
+                    await auth.signInWithEmailAndPassword(credencialAEmail(credencial), password);
+                } catch(err) {
+                    sessionStorage.removeItem(ELIX_LICENSE_SESSION_KEY);
+                    const code=String(err?.code||'');
+                    const friendly = code.includes('wrong-password') || code.includes('invalid-credential') || code.includes('user-not-found') || code.includes('invalid-login-credentials')
+                        ? 'Usuario o contraseña incorrectos.'
+                        : code.includes('user-disabled')
+                            ? 'Esta cuenta está deshabilitada.'
+                            : code.includes('too-many-requests')
+                                ? 'Demasiados intentos. Intenta nuevamente más tarde.'
+                                : code.includes('network-request-failed')
+                                    ? 'No se pudo conectar con Firebase. Revisa tu conexión.'
+                                    : (err?.message || 'No se pudo iniciar sesión.');
+                    errorBox.textContent=friendly;
+                } finally {
+                    submit.textContent='Iniciar sesión';
+                    actualizarBoton();
+                }
+            };
+
+            auth.onAuthStateChanged(async currentUser=>{
+                if(currentUser) {
+                    // Una sesión Firebase por sí sola no abre la app: también debe existir
+                    // la aceptación de licencia correspondiente a esta sesión.
+                    const licenciaAceptada=sessionStorage.getItem(ELIX_LICENSE_SESSION_KEY)===ELIX_LICENSE_VERSION;
+                    if(!licenciaAceptada) {
+                        overlay.classList.add('open');
+                        if(accountName) accountName.textContent='Sesión pendiente de aceptación';
+                        if(logoutBtn) logoutBtn.style.display='none';
+                        try { await auth.signOut(); } catch(_) {}
+                        return;
+                    }
+
+                    overlay.classList.remove('open');
+                    errorBox.textContent='';
+                    if(accountName) accountName.textContent=`Usuario: ${nombreUsuarioFirebase(currentUser) || 'autenticado'}`;
+                    if(logoutBtn) logoutBtn.style.display='block';
+                } else {
+                    overlay.classList.add('open');
+                    if(accountName) accountName.textContent='Sesión no iniciada';
+                    if(logoutBtn) logoutBtn.style.display='none';
+                }
+            });
+
+            if(logoutBtn) logoutBtn.onclick=async()=>{
+                sessionStorage.removeItem(ELIX_LICENSE_SESSION_KEY);
+                terms.checked=false;
+                pass.value='';
+                actualizarBoton();
+                await auth.signOut();
+            };
+        } catch(e) {
+            console.error('Firebase Auth no pudo inicializarse:',e);
+            if(accountName) accountName.textContent='Cuenta: error de configuración Firebase';
+            bloquearPorConfiguracion('No se pudo inicializar Firebase Authentication. Revisa ELIX_FIREBASE_CONFIG y que Email/Password esté habilitado en Firebase.');
+        }
+    }
+
+    iniciarFirebaseAuth();
+})();
+</script>
+</body>
+</html>
