@@ -548,6 +548,7 @@ textarea::placeholder { color: #52525b; }
         <div class="top-bar">
             <h1 class="app-title">Elix AI</h1>
             
+
         </div>
 
         <div class="chat-container" id="chat-history"></div>
@@ -2463,10 +2464,38 @@ Solicitud posterior: ${solicitud || 'Analizar el PDF adjunto.'}`;
     const elixEnviarMensajeExistente = window.enviarMensaje;
     window.enviarMensaje = async function(){
         if(elixMiniProcesando) return;
-        if(!elixAdjuntosPendientes.length) return await elixEnviarMensajeExistente();
 
         const input=document.getElementById('user-input');
-        const solicitud=(input?.value || '').trim() || 'Analiza los archivos adjuntos.';
+        const ordenDirecta=(input?.value || '').trim();
+        const exportacionDirecta=(ordenDirecta && typeof window.elixDetectarSolicitudExportacion==='function')
+            ? window.elixDetectarSolicitudExportacion(ordenDirecta)
+            : null;
+
+        // Las órdenes puras de exportación son comandos internos de Elix AI:
+        // NO se envían al modelo, NO activan búsqueda y NO procesan adjuntos.
+        if(exportacionDirecta && typeof window.elixExportarDocumento==='function'){
+            if(input){
+                input.value='';
+                input.style.height='auto';
+            }
+            agregarMensajeUI('user',ordenDirecta,null,[]);
+            const nombreFormato=exportacionDirecta.format==='docx' ? 'Word' : 'PDF';
+            agregarMensajeUI('assistant',`Preparando tu ${nombreFormato}. En breve comenzará la descarga.`,null,[]);
+            try{
+                setCargando(true,`📄 Elix AI preparando ${nombreFormato}...`);
+                await window.elixExportarDocumento(exportacionDirecta.scope,exportacionDirecta.format);
+            }catch(error){
+                console.error('Elix AI · exportación directa:',error);
+                agregarMensajeUI('assistant',`No se pudo preparar el ${nombreFormato}. Inténtalo nuevamente.`,null,[]);
+            }finally{
+                setCargando(false);
+            }
+            return;
+        }
+
+        if(!elixAdjuntosPendientes.length) return await elixEnviarMensajeExistente();
+
+        const solicitud=ordenDirecta || 'Analiza los archivos adjuntos.';
         const snapshot=[...elixAdjuntosPendientes];
         const metadata=snapshot.map(f=>({name:f.name,size:f.size,type:f.type||'',lastModified:f.lastModified||0}));
 
@@ -2582,43 +2611,103 @@ Solicitud posterior: ${solicitud || 'Analizar el PDF adjunto.'}`;
     let elixWordMathFramePromise=null;
     async function elixWordMathFrame(){
         if(elixWordMathFramePromise) return elixWordMathFramePromise;
-        elixWordMathFramePromise=new Promise((resolve,reject)=>{
-            const frame=document.createElement('iframe');
-            frame.setAttribute('aria-hidden','true');
-            frame.style.cssText='position:fixed;left:-100000px;top:0;width:900px;height:700px;border:0;opacity:0;pointer-events:none;';
-            frame.srcdoc=`<!doctype html><html><head><meta charset="utf-8"><script>window.MathJax={tex:{inlineMath:[['$','$'],['\\\\(','\\\\)']],displayMath:[['$$','$$'],['\\\\[','\\\\]']],processEscapes:true},svg:{fontCache:'local'},startup:{typeset:false}};<\/script><script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"><\/script></head><body></body></html>`;
-            document.body.appendChild(frame);
-            const inicio=Date.now();
-            const revisar=()=>{
-                const win=frame.contentWindow;
-                if(win?.MathJax?.tex2svgPromise) return resolve({frame,win});
-                if(Date.now()-inicio>12000){ frame.remove(); elixWordMathFramePromise=null; return reject(new Error('No se pudo iniciar el renderizador matemático de Word.')); }
-                setTimeout(revisar,120);
-            };
-            frame.onload=revisar;
-            setTimeout(revisar,180);
-        });
+        elixWordMathFramePromise=(async()=>{
+            const fuentes=[
+                'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js',
+                'https://unpkg.com/mathjax@3/es5/tex-svg.js'
+            ];
+            let ultimoError=null;
+            for(const src of fuentes){
+                try{
+                    const resultado=await new Promise((resolve,reject)=>{
+                        const frame=document.createElement('iframe');
+                        frame.setAttribute('aria-hidden','true');
+                        frame.style.cssText='position:fixed;left:-100000px;top:0;width:900px;height:700px;border:0;opacity:0;pointer-events:none;';
+                        frame.srcdoc=`<!doctype html><html><head><meta charset="utf-8"><script>window.MathJax={tex:{inlineMath:[[\'$\',\'$\'],[\'\\\\(\',\'\\\\)\']],displayMath:[[\'$$\',\'$$\'],[\'\\\\[\',\'\\\\]\']],processEscapes:true},svg:{fontCache:\'local\'},startup:{typeset:false}};<\/script><script src="${src}"><\/script></head><body></body></html>`;
+                        document.body.appendChild(frame);
+                        const inicio=Date.now();
+                        let terminado=false;
+                        const finalizar=(ok,error)=>{
+                            if(terminado) return; terminado=true;
+                            if(ok) resolve({frame,win:frame.contentWindow});
+                            else { frame.remove(); reject(error); }
+                        };
+                        const revisar=()=>{
+                            const win=frame.contentWindow;
+                            if(win?.MathJax?.tex2svgPromise) return finalizar(true);
+                            if(Date.now()-inicio>9000) return finalizar(false,new Error(`No se pudo cargar MathJax desde ${src}`));
+                            setTimeout(revisar,120);
+                        };
+                        frame.onload=revisar;
+                        setTimeout(revisar,180);
+                    });
+                    return resultado;
+                }catch(error){ ultimoError=error; }
+            }
+            elixWordMathFramePromise=null;
+            throw ultimoError || new Error('No se pudo iniciar el renderizador matemático de Word.');
+        })();
         return elixWordMathFramePromise;
+    }
+
+    function elixWordMedidaSvgPx(valor, exPx=7.25){
+        const s=String(valor||'').trim().toLowerCase();
+        const n=parseFloat(s);
+        if(!Number.isFinite(n)) return null;
+        if(s.endsWith('ex')) return n*exPx;
+        if(s.endsWith('em')) return n*(exPx*2);
+        if(s.endsWith('pt')) return n*(96/72);
+        if(s.endsWith('pc')) return n*16;
+        if(s.endsWith('in')) return n*96;
+        if(s.endsWith('cm')) return n*(96/2.54);
+        if(s.endsWith('mm')) return n*(96/25.4);
+        if(s.endsWith('px') || /^-?\d+(\.\d+)?$/.test(s)) return n;
+        return null;
     }
 
     async function elixWordSvgAPng(svg, display=false){
         const clone=svg.cloneNode(true);
         clone.setAttribute('xmlns','http://www.w3.org/2000/svg');
         clone.setAttribute('xmlns:xlink','http://www.w3.org/1999/xlink');
+
         const vb=(clone.getAttribute('viewBox')||'0 0 1000 300').trim().split(/\s+/).map(Number);
         let vw=Math.abs(vb[2]||1000), vh=Math.abs(vb[3]||300);
         if(!Number.isFinite(vw)||vw<=0) vw=1000;
         if(!Number.isFinite(vh)||vh<=0) vh=300;
-        const ratio=Math.max(.2,Math.min(30,vw/vh));
-        let h=display?48:23;
-        let w=h*ratio;
-        const maxW=display?610:260;
-        if(w>maxW){ w=maxW; h=w/ratio; }
-        h=Math.max(display?24:16,Math.min(display?85:38,h));
-        w=Math.max(12,Math.min(maxW,w));
+        const ratio=Math.max(.05,Math.min(80,vw/vh));
 
-        clone.setAttribute('width',String(Math.max(1,Math.round(w*2))));
-        clone.setAttribute('height',String(Math.max(1,Math.round(h*2))));
+        // MathJax expresa normalmente width/height en ex. Convertir esas medidas
+        // a píxeles físicos da una escala equivalente al texto de Word (11 pt),
+        // evitando fórmulas gigantes y conservando matrices/fracciones altas.
+        const exPx=display ? 7.6 : 7.15;
+        let w=elixWordMedidaSvgPx(clone.getAttribute('width'),exPx);
+        let h=elixWordMedidaSvgPx(clone.getAttribute('height'),exPx);
+
+        if(!(w>0) || !(h>0)){
+            h=display ? 20 : 14;
+            w=h*ratio;
+        }
+        // Corrige medidas anómalas sin alterar la proporción.
+        if(!(w>0) || !Number.isFinite(w)) w=(display?20:14)*ratio;
+        if(!(h>0) || !Number.isFinite(h)) h=display?20:14;
+
+        const maxW=display ? 560 : 320;
+        const maxH=display ? 54 : 30;
+        let scale=Math.min(1,maxW/w,maxH/h);
+        if(scale<1){ w*=scale; h*=scale; }
+
+        // No se fuerza una altura grande: una variable simple debe verse como texto.
+        const minH=display ? 8 : 7;
+        if(h<minH){ const up=minH/h; h*=up; w*=up; }
+        if(w>maxW){ const down=maxW/w; w*=down; h*=down; }
+
+        // Raster de alta resolución; el tamaño físico en Word se conserva pequeño.
+        const renderScale=4;
+        clone.setAttribute('width',String(Math.max(1,Math.round(w*renderScale))));
+        clone.setAttribute('height',String(Math.max(1,Math.round(h*renderScale))));
+        clone.style.width=`${Math.max(1,Math.round(w*renderScale))}px`;
+        clone.style.height=`${Math.max(1,Math.round(h*renderScale))}px`;
+
         const texto=new XMLSerializer().serializeToString(clone);
         const svgBlob=new Blob([texto],{type:'image/svg+xml;charset=utf-8'});
         const url=URL.createObjectURL(svgBlob);
@@ -2629,10 +2718,9 @@ Solicitud posterior: ${solicitud || 'Analizar el PDF adjunto.'}`;
                 im.onerror=()=>reject(new Error('No se pudo rasterizar una fórmula.'));
                 im.src=url;
             });
-            const scale=2;
             const canvas=document.createElement('canvas');
-            canvas.width=Math.max(1,Math.ceil(w*scale));
-            canvas.height=Math.max(1,Math.ceil(h*scale));
+            canvas.width=Math.max(1,Math.ceil(w*renderScale));
+            canvas.height=Math.max(1,Math.ceil(h*renderScale));
             const ctx=canvas.getContext('2d',{alpha:true});
             ctx.clearRect(0,0,canvas.width,canvas.height);
             ctx.drawImage(img,0,0,canvas.width,canvas.height);
@@ -2662,7 +2750,7 @@ Solicitud posterior: ${solicitud || 'Analizar el PDF adjunto.'}`;
         state.media.push({path,bytes:imagen.bytes,ext});
         const rid=elixWordRelacion(state,'http://schemas.openxmlformats.org/officeDocument/2006/relationships/image',path);
         const maxW=625;
-        let w=Math.max(12,Number(imagen.width)||100), h=Math.max(12,Number(imagen.height)||40);
+        let w=Math.max(6,Number(imagen.width)||100), h=Math.max(6,Number(imagen.height)||40);
         if(w>maxW){ h*=maxW/w; w=maxW; }
         const cx=Math.round(w*9525), cy=Math.round(h*9525);
         const docId=state.nextDocPr++;
