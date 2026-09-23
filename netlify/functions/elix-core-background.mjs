@@ -53,7 +53,7 @@ export const handler = async (event) => {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${apiKey}`,
           },
-          body: JSON.stringify({ engine: 'elix-core', messages, max_tokens: maxTokens }),
+          body: JSON.stringify({ model: MODEL, messages, max_tokens: maxTokens }),
         }, Math.max(10000, remaining - 10000));
 
         const data = await readJsonResponse(response);
